@@ -1,6 +1,6 @@
 # 🦦 Otters
 
-_Smooth, intelligent data processing for Go_.
+_Smooth, intelligent data processing for Go._
 
 Otters is a high-performance DataFrame library for Go, inspired by Pandas but designed for Go's strengths: type safety, performance, and simplicity.
 
@@ -10,7 +10,7 @@ Otters is a high-performance DataFrame library for Go, inspired by Pandas but de
 
 ## ✨ Features
 
-- 🎯 **Type-safe** - Native Go types (int64, float64, string, bool)
+- 🎯 **Type-safe** - Native Go types (int64, float64, string, bool, time)
 - ⚡ **High performance** - Optimized for Go's strengths
 - 🛡️ **Memory safe** - No shared slices, proper error handling
 - 🐍 **Pandas-like API** - Familiar for data scientists
@@ -27,7 +27,7 @@ Otters is a high-performance DataFrame library for Go, inspired by Pandas but de
 go get github.com/datumbrain/otters
 ```
 
-### Benchmarks
+### Performance Benchmarks
 
 ```raw
 goos: darwin
@@ -71,8 +71,10 @@ func main() {
     }
 
     // Get insights
-    fmt.Printf("Total sales: $%.2f\n", result.Sum("amount"))
-    fmt.Printf("Average deal: $%.2f\n", result.Mean("amount"))
+    totalSales, _ := result.Sum("amount")
+    avgDeal, _ := result.Mean("amount")
+    fmt.Printf("Total sales: $%.2f\n", totalSales)
+    fmt.Printf("Average deal: $%.2f\n", avgDeal)
     fmt.Printf("Top deals: %d\n", result.Count())
 
     // Save results
@@ -134,13 +136,19 @@ ranked := df.SortBy(
 
 ```go
 // Basic statistics
-fmt.Printf("Average salary: $%.2f\n", df.Mean("salary"))
-fmt.Printf("Total payroll: $%.2f\n", df.Sum("salary"))
-fmt.Printf("Salary range: $%.2f - $%.2f\n", df.Min("salary"), df.Max("salary"))
-fmt.Printf("Std deviation: $%.2f\n", df.Std("salary"))
+avgSalary, _ := df.Mean("salary")
+totalPayroll, _ := df.Sum("salary")
+minSalary, _ := df.Min("salary")
+maxSalary, _ := df.Max("salary")
+stdDev, _ := df.Std("salary")
+
+fmt.Printf("Average salary: $%.2f\n", avgSalary)
+fmt.Printf("Total payroll: $%.2f\n", totalPayroll)
+fmt.Printf("Salary range: $%.2f - $%.2f\n", minSalary, maxSalary)
+fmt.Printf("Std deviation: $%.2f\n", stdDev)
 
 // Summary statistics for all numeric columns
-summary := df.Describe()
+summary, _ := df.Describe()
 fmt.Println(summary)
 ```
 
@@ -152,7 +160,7 @@ df_with_bonus := df.Copy()
 // Add 10% bonus calculation (implementation coming soon)
 
 // Rename columns
-clean_df := df.Rename("hired_date", "start_date")
+clean_df := df.RenameColumn("hired_date", "start_date")
 
 // Drop columns
 essential := df.Drop("internal_id", "notes")
@@ -171,8 +179,8 @@ df, err := otters.ReadCSVWithOptions("data.csv", otters.CSVOptions{
     SkipRows:  1,
 })
 
-// From data (coming soon)
-df := otters.NewDataFrame(map[string]interface{}{
+// From data
+df, err := otters.NewDataFrameFromMap(map[string]interface{}{
     "name":   []string{"Alice", "Bob", "Carol"},
     "age":    []int64{25, 30, 35},
     "salary": []float64{50000, 60000, 70000},
@@ -204,26 +212,26 @@ df.SortBy([]string{"col1", "col2"}, []bool{true, false})
 
 ```go
 // Basic stats
-df.Count()           // Number of rows
-df.Sum("column")     // Sum of numeric column
-df.Mean("column")    // Average of numeric column
-df.Min("column")     // Minimum value
-df.Max("column")     // Maximum value
-df.Std("column")     // Standard deviation
+df.Count()                    // Number of rows
+sum, _ := df.Sum("column")    // Sum of numeric column
+mean, _ := df.Mean("column")  // Average of numeric column
+min, _ := df.Min("column")    // Minimum value
+max, _ := df.Max("column")    // Maximum value
+std, _ := df.Std("column")    // Standard deviation
 
 // Summary
-df.Describe()        // Summary statistics for all numeric columns
+summary, _ := df.Describe()   // Summary statistics for all numeric columns
 ```
 
 ### I/O Operations
 
 ```go
 // CSV
-df, err := otter.ReadCSV("input.csv")
+df, err := otters.ReadCSV("input.csv")
 err = df.WriteCSV("output.csv")
 
 // With options
-df, err := otter.ReadCSVWithOptions("data.csv", otter.CSVOptions{
+df, err := otters.ReadCSVWithOptions("data.csv", otters.CSVOptions{
     HasHeader: true,
     Delimiter: '\t',
     SkipRows:  2,
