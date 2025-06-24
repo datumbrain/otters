@@ -27,6 +27,21 @@ Otters is a high-performance DataFrame library for Go, inspired by Pandas but de
 go get github.com/datumbrain/otters
 ```
 
+### Benchmarks
+
+```raw
+goos: darwin
+goarch: arm64
+pkg: github.com/datumbrain/otters
+cpu: Apple M2 Pro
+BenchmarkDataFrameOperations/Filter-10         	    4258	    283593 ns/op
+BenchmarkDataFrameOperations/Sort-10           	    3748	    329145 ns/op
+BenchmarkDataFrameOperations/GroupBy-10        	     780	   1544577 ns/op
+BenchmarkDataFrameOperations/Statistics-10     	   12150	     99351 ns/op
+PASS
+ok  	github.com/datumbrain/otters	7.219s
+```
+
 ### Basic Usage
 
 ```go
