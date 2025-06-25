@@ -327,8 +327,6 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - Inspired by [Pandas](https://pandas.pydata.org/) for the API design
 - Built for the Go community with ❤️
 
----
-
-**Like an otter in water - smooth, efficient, and playful with data** 🦦
+> Like an otter in water - smooth, efficient, and playful with data. 🦦
 
 [![Made with ❤️ by Datum Brain](https://img.shields.io/badge/made%20with%20❤️%20by-Datum%20Brain-blue)](https://github.com/datumbrain)
