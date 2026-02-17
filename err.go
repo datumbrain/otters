@@ -228,12 +228,11 @@ func validateSameLength(series []*Series) error {
 	return nil
 }
 
-// setError sets an error on the DataFrame for operation chaining
+// setError returns a new DataFrame carrying the error, leaving the receiver untouched.
 func (df *DataFrame) setError(err error) *DataFrame {
-	if df.err == nil { // Only set the first error
-		df.err = err
-	}
-	return df
+	newDf := NewDataFrame()
+	newDf.err = err
+	return newDf
 }
 
 // clearError clears the error state (used internally)

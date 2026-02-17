@@ -9,8 +9,8 @@ import (
 	"time"
 )
 
-// ExampleBasicDataFrame demonstrates basic DataFrame operations
-func ExampleBasicDataFrame() {
+// Example_basicDataFrame demonstrates basic DataFrame operations
+func Example_basicDataFrame() {
 	// Create sample data
 	data := map[string]interface{}{
 		"name":   []string{"Alice", "Bob", "Carol"},
@@ -386,6 +386,112 @@ Carol,28,92.1`
 	tolerance := 0.001
 	if math.Abs(avgScore-expectedAvg) > tolerance {
 		t.Errorf("Expected average %.6f, got %.6f", expectedAvg, avgScore)
+	}
+}
+
+// TestTimeTypeHeadTail verifies that Head and Tail work on DataFrames with
+// TimeType columns (regression for missing TimeType case in slice()).
+func TestTimeTypeHeadTail(t *testing.T) {
+	t1, _ := time.Parse("2006-01-02", "2024-01-01")
+	t2, _ := time.Parse("2006-01-02", "2024-01-02")
+	t3, _ := time.Parse("2006-01-02", "2024-01-03")
+
+	s, err := NewSeries("date", []time.Time{t1, t2, t3})
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	df, err := NewDataFrameFromSeries(s)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	head := df.Head(2)
+	if head.Error() != nil {
+		t.Fatalf("Head on TimeType column failed: %v", head.Error())
+	}
+	if rows, _ := head.Shape(); rows != 2 {
+		t.Errorf("Head(2) returned %d rows, want 2", rows)
+	}
+
+	tail := df.Tail(1)
+	if tail.Error() != nil {
+		t.Fatalf("Tail on TimeType column failed: %v", tail.Error())
+	}
+	if rows, _ := tail.Shape(); rows != 1 {
+		t.Errorf("Tail(1) returned %d rows, want 1", rows)
+	}
+
+	// Verify the value is correct
+	val, err := tail.Get(0, "date")
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if !val.(time.Time).Equal(t3) {
+		t.Errorf("Tail value = %v, want %v", val, t3)
+	}
+}
+
+// TestGroupByKeyCollision verifies that group values containing the pipe
+// character do not cause key collisions (regression for GroupBy key bug).
+func TestGroupByKeyCollision(t *testing.T) {
+	// "a|b" and "a" with "b" are distinct groups but produced the same "|"-joined key.
+	data := map[string]interface{}{
+		"category": []string{"a|b", "a|b", "a"},
+		"value":    []float64{1, 2, 10},
+	}
+	df, err := NewDataFrameFromMap(data)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	result, err := df.GroupBy("category").Sum()
+	if err != nil {
+		t.Fatalf("GroupBy.Sum failed: %v", err)
+	}
+
+	rows, _ := result.Shape()
+	if rows != 2 {
+		t.Errorf("expected 2 groups, got %d", rows)
+	}
+
+	// Find the "a|b" group and verify its sum is 3, not 13.
+	for i := 0; i < rows; i++ {
+		cat, _ := result.Get(i, "category")
+		val, _ := result.Get(i, "value")
+		if cat.(string) == "a|b" {
+			if val.(float64) != 3 {
+				t.Errorf("group \"a|b\" sum = %v, want 3", val)
+			}
+		}
+		if cat.(string) == "a" {
+			if val.(float64) != 10 {
+				t.Errorf("group \"a\" sum = %v, want 10", val)
+			}
+		}
+	}
+}
+
+// TestSetErrorDoesNotMutateCaller verifies that a failed operation does not
+// corrupt the original DataFrame (regression for the setError mutation bug).
+func TestSetErrorDoesNotMutateCaller(t *testing.T) {
+	data := map[string]interface{}{
+		"a": []int64{1, 2, 3},
+	}
+	df, err := NewDataFrameFromMap(data)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	_ = df.Filter("nonexistent", "==", int64(1))
+
+	if df.Error() != nil {
+		t.Errorf("Filter on nonexistent column mutated the original DataFrame: %v", df.Error())
+	}
+
+	rows, cols := df.Shape()
+	if rows != 3 || cols != 1 {
+		t.Errorf("original DataFrame shape changed after failed Filter: got (%d, %d), want (3, 1)", rows, cols)
 	}
 }
 

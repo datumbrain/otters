@@ -583,20 +583,33 @@ func (gb *GroupBy) aggregate(operation string) (*DataFrame, error) {
 		return nil, gb.err
 	}
 
-	// Create groups
-	groups := make(map[string][]int)
+	// Create groups; store both the dedup key and the original string values.
+	type group struct {
+		values  []string
+		indices []int
+	}
+	groups := make(map[string]*group)
 
 	for i := 0; i < gb.df.length; i++ {
-		var keyParts []string
-		for _, col := range gb.columns {
+		var key strings.Builder
+		values := make([]string, len(gb.columns))
+		for j, col := range gb.columns {
 			value, err := gb.df.Get(i, col)
 			if err != nil {
 				return nil, err
 			}
-			keyParts = append(keyParts, fmt.Sprintf("%v", value))
+			if j > 0 {
+				key.WriteByte(0) // null byte — cannot appear in normal string data
+			}
+			part := fmt.Sprintf("%v", value)
+			values[j] = part
+			fmt.Fprintf(&key, "%d:%s", len(part), part)
 		}
-		key := strings.Join(keyParts, "|")
-		groups[key] = append(groups[key], i)
+		k := key.String()
+		if _, exists := groups[k]; !exists {
+			groups[k] = &group{values: values}
+		}
+		groups[k].indices = append(groups[k].indices, i)
 	}
 
 	// Create result DataFrame
@@ -620,13 +633,12 @@ func (gb *GroupBy) aggregate(operation string) (*DataFrame, error) {
 	}
 
 	// Process each group
-	for key, indices := range groups {
-		keyParts := strings.Split(key, "|")
-
+	for _, g := range groups {
 		// Add group key values
 		for i, col := range gb.columns {
-			resultData[col] = append(resultData[col].([]string), keyParts[i])
+			resultData[col] = append(resultData[col].([]string), g.values[i])
 		}
+		indices := g.indices
 
 		// Calculate aggregations
 		for _, colName := range gb.df.order {

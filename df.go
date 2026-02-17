@@ -3,6 +3,7 @@ package otters
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 // NewDataFrameFromSeries creates a DataFrame from a collection of Series
@@ -405,6 +406,10 @@ func (df *DataFrame) slice(start, end int, operation string) *DataFrame {
 			data := series.Data.([]bool)
 			newData = make([]bool, end-start)
 			copy(newData.([]bool), data[start:end])
+		case TimeType:
+			data := series.Data.([]time.Time)
+			newData = make([]time.Time, end-start)
+			copy(newData.([]time.Time), data[start:end])
 		default:
 			return df.setError(newOpError(operation, "unsupported column type for slicing"))
 		}
