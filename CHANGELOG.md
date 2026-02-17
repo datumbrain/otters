@@ -29,3 +29,25 @@ All notable changes to this project will be documented in this file.
 - `TestSetErrorDoesNotMutateCaller` — asserts that a failed operation on a valid DataFrame does not modify the original.
 - `TestTimeTypeHeadTail` — asserts that `Head` and `Tail` return correct rows on a DataFrame with a `TimeType` column.
 - `TestGroupByKeyCollision` — asserts that groups whose values contain `"|"` are counted and aggregated independently.
+
+---
+
+## [Unreleased] — 2026-02-17 (P1 + P2)
+
+### Fixed
+
+- **Non-deterministic column order (`NewDataFrameFromMap`)** — Map iteration order in Go is randomized; `NewDataFrameFromMap` was building the series slice in that random order, producing different `Columns()` results across runs. Keys are now sorted alphabetically before iteration, giving a stable, predictable column order.
+
+- **Non-deterministic GroupBy row order (`aggregate`)** — The internal `aggregate` function iterated directly over the `groups` map, whose key order is randomized by the Go runtime. Group keys are now collected into a slice and sorted before iteration, so `GroupBy` output is always in a consistent order regardless of runtime or input sequence.
+
+### Tests added
+
+- `TestDeterministicFromMap` — runs `NewDataFrameFromMap` 20 times and asserts column order is always alphabetical (P1 regression).
+- `TestDeterministicGroupBy` — runs `GroupBy.Sum()` 10 times and asserts row order is identical across all runs (P1 regression).
+- `TestDataFrameManipulation` — covers `Tail`, `Set`, `GetSeries`, `AddColumn`, `DropColumn`, `RenameColumn`, `IsEmpty`, and `HasColumn`.
+- `TestOpsOperations` — covers `Drop`, `SortBy`, `Unique`, `Query`, `Where`, and `ResetIndex`.
+- `TestGroupByMinMax` — covers `GroupBy.Min()` and `GroupBy.Max()`.
+- `TestStringOperators` — covers `Filter` with `contains`, `startswith`, and `endswith` operators.
+- `TestStatsOperations` — covers `Median`, `Var`, `Quantile`, `Describe`, `ValueCounts`, `Correlation`, and `NumericSummary`.
+- `TestCSVFileOperations` — covers `WriteCSV`/`ReadCSV` roundtrip, tab-delimited `WriteCSVWithOptions`/`ReadCSVWithOptions`, `DetectDelimiter`, `ValidateCSV` (valid and invalid files), headerless CSV, and `MaxRows` option.
+- `TestSentinelErrors` — asserts all five sentinel errors (`ErrColumnNotFound`, `ErrIndexOutOfRange`, `ErrTypeMismatch`, `ErrEmptyDataFrame`, `ErrInvalidOperation`) are non-nil, and covers `SafeOperation` and `MustOperation` behaviour.
