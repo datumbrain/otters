@@ -629,7 +629,6 @@ func (df *DataFrame) selectRows(indices []int, operation string) *DataFrame {
 	return newDf
 }
 
-
 // compareValues compares two values of the same type, returns -1, 0, or 1
 func compareValues(a, b interface{}, columnType ColumnType) int {
 	switch columnType {
@@ -687,7 +686,6 @@ func compareValues(a, b interface{}, columnType ColumnType) int {
 		return 0
 	}
 }
-
 
 // seriesValueToString extracts value at index i from series as string (no boxing).
 func seriesValueToString(series *Series, i int) string {
