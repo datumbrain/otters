@@ -23,27 +23,195 @@ func (df *DataFrame) Filter(column, operator string, value interface{}) *DataFra
 	}
 
 	series := df.columns[column]
-	var matchingIndices []int
 
-	// Evaluate condition for each row
-	for i := 0; i < df.length; i++ {
-		cellValue, err := series.Get(i)
-		if err != nil {
-			return df.setError(wrapColumnError("Filter", column, err))
+	// Try optimized typed path first
+	matchingIndices, err := filterIndicesTyped(series, operator, value)
+	if err != nil {
+		return df.setError(wrapColumnError("Filter", column, err))
+	}
+
+	return df.selectRows(matchingIndices, "Filter")
+}
+
+// filterIndicesTyped returns matching indices using typed slice access to avoid boxing.
+func filterIndicesTyped(series *Series, operator string, value interface{}) ([]int, error) {
+	indices := make([]int, 0, series.Length/4) // pre-allocate for ~25% selectivity
+
+	switch series.Type {
+	case Int64Type:
+		data := series.Data.([]int64)
+		cmp, ok := toInt64(value)
+		if !ok {
+			return nil, newOpError("Filter", fmt.Sprintf("cannot convert %T to int64", value))
+		}
+		for i, v := range data {
+			if matchInt64(v, operator, cmp) {
+				indices = append(indices, i)
+			}
 		}
 
-		matches, err := evaluateCondition(cellValue, operator, value, series.Type)
-		if err != nil {
-			return df.setError(wrapColumnError("Filter", column, err))
+	case Float64Type:
+		data := series.Data.([]float64)
+		cmp, ok := toFloat64(value)
+		if !ok {
+			return nil, newOpError("Filter", fmt.Sprintf("cannot convert %T to float64", value))
+		}
+		for i, v := range data {
+			if matchFloat64(v, operator, cmp) {
+				indices = append(indices, i)
+			}
 		}
 
-		if matches {
-			matchingIndices = append(matchingIndices, i)
+	case StringType:
+		data := series.Data.([]string)
+		cmp, ok := value.(string)
+		if !ok {
+			cmp = fmt.Sprintf("%v", value)
+		}
+		for i, v := range data {
+			if matchString(v, operator, cmp) {
+				indices = append(indices, i)
+			}
+		}
+
+	case BoolType:
+		data := series.Data.([]bool)
+		cmp, ok := value.(bool)
+		if !ok {
+			return nil, newOpError("Filter", fmt.Sprintf("cannot convert %T to bool", value))
+		}
+		for i, v := range data {
+			if matchBool(v, operator, cmp) {
+				indices = append(indices, i)
+			}
+		}
+
+	case TimeType:
+		data := series.Data.([]time.Time)
+		cmp, ok := value.(time.Time)
+		if !ok {
+			return nil, newOpError("Filter", fmt.Sprintf("cannot convert %T to time.Time", value))
+		}
+		for i, v := range data {
+			if matchTime(v, operator, cmp) {
+				indices = append(indices, i)
+			}
 		}
 	}
 
-	// Create new DataFrame with matching rows
-	return df.selectRows(matchingIndices, "Filter")
+	return indices, nil
+}
+
+func toInt64(v interface{}) (int64, bool) {
+	switch x := v.(type) {
+	case int64:
+		return x, true
+	case int:
+		return int64(x), true
+	case float64:
+		return int64(x), true
+	}
+	return 0, false
+}
+
+func toFloat64(v interface{}) (float64, bool) {
+	switch x := v.(type) {
+	case float64:
+		return x, true
+	case int64:
+		return float64(x), true
+	case int:
+		return float64(x), true
+	}
+	return 0, false
+}
+
+func matchInt64(v int64, op string, cmp int64) bool {
+	switch op {
+	case "==", "=":
+		return v == cmp
+	case "!=", "<>":
+		return v != cmp
+	case ">":
+		return v > cmp
+	case ">=":
+		return v >= cmp
+	case "<":
+		return v < cmp
+	case "<=":
+		return v <= cmp
+	}
+	return false
+}
+
+func matchFloat64(v float64, op string, cmp float64) bool {
+	switch op {
+	case "==", "=":
+		return v == cmp
+	case "!=", "<>":
+		return v != cmp
+	case ">":
+		return v > cmp
+	case ">=":
+		return v >= cmp
+	case "<":
+		return v < cmp
+	case "<=":
+		return v <= cmp
+	}
+	return false
+}
+
+func matchString(v, op, cmp string) bool {
+	switch op {
+	case "==", "=":
+		return v == cmp
+	case "!=", "<>":
+		return v != cmp
+	case ">":
+		return v > cmp
+	case ">=":
+		return v >= cmp
+	case "<":
+		return v < cmp
+	case "<=":
+		return v <= cmp
+	case "contains":
+		return strings.Contains(v, cmp)
+	case "startswith":
+		return strings.HasPrefix(v, cmp)
+	case "endswith":
+		return strings.HasSuffix(v, cmp)
+	}
+	return false
+}
+
+func matchBool(v bool, op string, cmp bool) bool {
+	switch op {
+	case "==", "=":
+		return v == cmp
+	case "!=", "<>":
+		return v != cmp
+	}
+	return false
+}
+
+func matchTime(v time.Time, op string, cmp time.Time) bool {
+	switch op {
+	case "==", "=":
+		return v.Equal(cmp)
+	case "!=", "<>":
+		return !v.Equal(cmp)
+	case ">":
+		return v.After(cmp)
+	case ">=":
+		return v.After(cmp) || v.Equal(cmp)
+	case "<":
+		return v.Before(cmp)
+	case "<=":
+		return v.Before(cmp) || v.Equal(cmp)
+	}
+	return false
 }
 
 // Select creates a new DataFrame with only the specified columns
@@ -187,20 +355,59 @@ func (df *DataFrame) Unique(column string) ([]interface{}, error) {
 	}
 
 	series := df.columns[column]
-	seen := make(map[interface{}]bool)
-	var unique []interface{}
+	seen := make(map[string]bool, series.Length/4) // pre-size for ~25% cardinality
+	unique := make([]interface{}, 0, series.Length/4)
 
-	for i := 0; i < series.Length; i++ {
-		value, err := series.Get(i)
-		if err != nil {
-			return nil, wrapColumnError("Unique", column, err)
+	// Type-switch once, iterate typed slice directly to avoid per-row boxing
+	switch series.Type {
+	case StringType:
+		data := series.Data.([]string)
+		for _, v := range data {
+			if !seen[v] {
+				seen[v] = true
+				unique = append(unique, v)
+			}
 		}
-
-		// Use string representation for comparison to handle all types
-		key := fmt.Sprintf("%v", value)
-		if !seen[key] {
-			seen[key] = true
-			unique = append(unique, value)
+	case Int64Type:
+		data := series.Data.([]int64)
+		for _, v := range data {
+			key := strconv.FormatInt(v, 10)
+			if !seen[key] {
+				seen[key] = true
+				unique = append(unique, v)
+			}
+		}
+	case Float64Type:
+		data := series.Data.([]float64)
+		for _, v := range data {
+			key := strconv.FormatFloat(v, 'g', -1, 64)
+			if !seen[key] {
+				seen[key] = true
+				unique = append(unique, v)
+			}
+		}
+	case BoolType:
+		data := series.Data.([]bool)
+		for _, v := range data {
+			var key string
+			if v {
+				key = "true"
+			} else {
+				key = "false"
+			}
+			if !seen[key] {
+				seen[key] = true
+				unique = append(unique, v)
+			}
+		}
+	case TimeType:
+		data := series.Data.([]time.Time)
+		for _, v := range data {
+			key := v.String()
+			if !seen[key] {
+				seen[key] = true
+				unique = append(unique, v)
+			}
 		}
 	}
 
@@ -590,20 +797,46 @@ func (gb *GroupBy) aggregate(operation string) (*DataFrame, error) {
 	}
 	groups := make(map[string]*group)
 
+	// Pre-cache series pointers for grouping columns (avoids map lookup per row)
+	groupSeries := make([]*Series, len(gb.columns))
+	for j, col := range gb.columns {
+		groupSeries[j] = gb.df.columns[col]
+	}
+
+	// Pre-allocate key builder with reasonable capacity
+	var key strings.Builder
+	key.Grow(64)
+
 	for i := 0; i < gb.df.length; i++ {
-		var key strings.Builder
+		key.Reset()
 		values := make([]string, len(gb.columns))
-		for j, col := range gb.columns {
-			value, err := gb.df.Get(i, col)
-			if err != nil {
-				return nil, err
-			}
+		for j, series := range groupSeries {
 			if j > 0 {
 				key.WriteByte(0) // null byte — cannot appear in normal string data
 			}
-			part := fmt.Sprintf("%v", value)
+			// Type-switch to avoid interface{} boxing and fmt.Sprintf
+			var part string
+			switch series.Type {
+			case StringType:
+				part = series.Data.([]string)[i]
+			case Int64Type:
+				part = strconv.FormatInt(series.Data.([]int64)[i], 10)
+			case Float64Type:
+				part = strconv.FormatFloat(series.Data.([]float64)[i], 'g', -1, 64)
+			case BoolType:
+				if series.Data.([]bool)[i] {
+					part = "true"
+				} else {
+					part = "false"
+				}
+			case TimeType:
+				part = series.Data.([]time.Time)[i].String()
+			}
 			values[j] = part
-			fmt.Fprintf(&key, "%d:%s", len(part), part)
+			// Length-prefix for collision resistance
+			key.WriteString(strconv.Itoa(len(part)))
+			key.WriteByte(':')
+			key.WriteString(part)
 		}
 		k := key.String()
 		if _, exists := groups[k]; !exists {
@@ -612,121 +845,175 @@ func (gb *GroupBy) aggregate(operation string) (*DataFrame, error) {
 		groups[k].indices = append(groups[k].indices, i)
 	}
 
-	// Create result DataFrame
-	resultData := make(map[string]interface{})
-
-	// Add group columns
-	for _, col := range gb.columns {
-		resultData[col] = []string{}
-	}
-
-	// Add aggregated columns for numeric columns
-	for _, colName := range gb.df.order {
-		if contains(gb.columns, colName) {
-			continue // Skip grouping columns
-		}
-
-		colType, _ := gb.df.GetColumnType(colName)
-		if colType == Int64Type || colType == Float64Type {
-			resultData[colName] = []float64{}
-		}
-	}
+	numGroups := len(groups)
 
 	// Sort group keys for deterministic output order
-	sortedKeys := make([]string, 0, len(groups))
+	sortedKeys := make([]string, 0, numGroups)
 	for k := range groups {
 		sortedKeys = append(sortedKeys, k)
 	}
 	sort.Strings(sortedKeys)
 
+	// Pre-allocate result slices with exact capacity
+	groupColData := make([][]string, len(gb.columns))
+	for j := range gb.columns {
+		groupColData[j] = make([]string, 0, numGroups)
+	}
+
+	// Identify numeric columns and pre-allocate their result slices
+	type numericCol struct {
+		name string
+		data []float64
+	}
+	var numericCols []numericCol
+	for _, colName := range gb.df.order {
+		if contains(gb.columns, colName) {
+			continue
+		}
+		colType, _ := gb.df.GetColumnType(colName)
+		if colType == Int64Type || colType == Float64Type {
+			numericCols = append(numericCols, numericCol{
+				name: colName,
+				data: make([]float64, 0, numGroups),
+			})
+		}
+	}
+
 	// Process each group
 	for _, k := range sortedKeys {
 		g := groups[k]
 		// Add group key values
-		for i, col := range gb.columns {
-			resultData[col] = append(resultData[col].([]string), g.values[i])
+		for j := range gb.columns {
+			groupColData[j] = append(groupColData[j], g.values[j])
 		}
-		indices := g.indices
 
-		// Calculate aggregations
-		for _, colName := range gb.df.order {
-			if contains(gb.columns, colName) {
-				continue
+		// Calculate aggregations for numeric columns
+		for i := range numericCols {
+			aggValue, err := gb.calculateAggregation(numericCols[i].name, g.indices, operation)
+			if err != nil {
+				return nil, err
 			}
-
-			colType, _ := gb.df.GetColumnType(colName)
-			if colType == Int64Type || colType == Float64Type {
-				aggValue, err := gb.calculateAggregation(colName, indices, operation)
-				if err != nil {
-					return nil, err
-				}
-				resultData[colName] = append(resultData[colName].([]float64), aggValue)
-			}
+			numericCols[i].data = append(numericCols[i].data, aggValue)
 		}
 	}
 
-	return NewDataFrameFromMap(resultData)
+	// Build result DataFrame directly with NewDataFrameFromSeries (avoids map overhead)
+	resultSeries := make([]*Series, 0, len(gb.columns)+len(numericCols))
+	for j, col := range gb.columns {
+		s, err := NewSeries(col, groupColData[j])
+		if err != nil {
+			return nil, err
+		}
+		resultSeries = append(resultSeries, s)
+	}
+	for _, nc := range numericCols {
+		s, err := NewSeries(nc.name, nc.data)
+		if err != nil {
+			return nil, err
+		}
+		resultSeries = append(resultSeries, s)
+	}
+
+	return NewDataFrameFromSeries(resultSeries...)
 }
 
-// calculateAggregation calculates aggregation for a column and indices
+// calculateAggregation calculates aggregation for a column and indices.
+// Optimized to access typed slices directly, avoiding per-row interface{} boxing.
 func (gb *GroupBy) calculateAggregation(column string, indices []int, operation string) (float64, error) {
-	var values []float64
-
-	for _, idx := range indices {
-		value, err := gb.df.Get(idx, column)
-		if err != nil {
-			return 0, err
-		}
-
-		var floatValue float64
-		switch v := value.(type) {
-		case int64:
-			floatValue = float64(v)
-		case float64:
-			floatValue = v
-		default:
-			continue // Skip non-numeric values
-		}
-		values = append(values, floatValue)
-	}
-
-	if len(values) == 0 {
+	series := gb.df.columns[column]
+	n := len(indices)
+	if n == 0 {
 		return 0, nil
 	}
 
+	// Fast path: access typed slice directly, compute aggregation in one pass
+	switch series.Type {
+	case Int64Type:
+		data := series.Data.([]int64)
+		return aggregateInt64(data, indices, operation)
+	case Float64Type:
+		data := series.Data.([]float64)
+		return aggregateFloat64(data, indices, operation)
+	default:
+		return 0, nil // Non-numeric column
+	}
+}
+
+// aggregateInt64 computes aggregation on int64 slice for given indices.
+func aggregateInt64(data []int64, indices []int, operation string) (float64, error) {
+	n := len(indices)
 	switch operation {
 	case "sum":
-		sum := 0.0
-		for _, v := range values {
-			sum += v
+		var sum int64
+		for _, idx := range indices {
+			sum += data[idx]
+		}
+		return float64(sum), nil
+	case "mean":
+		var sum int64
+		for _, idx := range indices {
+			sum += data[idx]
+		}
+		return float64(sum) / float64(n), nil
+	case "count":
+		return float64(n), nil
+	case "min":
+		minVal := data[indices[0]]
+		for _, idx := range indices[1:] {
+			if data[idx] < minVal {
+				minVal = data[idx]
+			}
+		}
+		return float64(minVal), nil
+	case "max":
+		maxVal := data[indices[0]]
+		for _, idx := range indices[1:] {
+			if data[idx] > maxVal {
+				maxVal = data[idx]
+			}
+		}
+		return float64(maxVal), nil
+	default:
+		return 0, newOpError("aggregateInt64", fmt.Sprintf("unsupported operation: %s", operation))
+	}
+}
+
+// aggregateFloat64 computes aggregation on float64 slice for given indices.
+func aggregateFloat64(data []float64, indices []int, operation string) (float64, error) {
+	n := len(indices)
+	switch operation {
+	case "sum":
+		var sum float64
+		for _, idx := range indices {
+			sum += data[idx]
 		}
 		return sum, nil
 	case "mean":
-		sum := 0.0
-		for _, v := range values {
-			sum += v
+		var sum float64
+		for _, idx := range indices {
+			sum += data[idx]
 		}
-		return sum / float64(len(values)), nil
+		return sum / float64(n), nil
 	case "count":
-		return float64(len(values)), nil
+		return float64(n), nil
 	case "min":
-		min := values[0]
-		for _, v := range values {
-			if v < min {
-				min = v
+		minVal := data[indices[0]]
+		for _, idx := range indices[1:] {
+			if data[idx] < minVal {
+				minVal = data[idx]
 			}
 		}
-		return min, nil
+		return minVal, nil
 	case "max":
-		max := values[0]
-		for _, v := range values {
-			if v > max {
-				max = v
+		maxVal := data[indices[0]]
+		for _, idx := range indices[1:] {
+			if data[idx] > maxVal {
+				maxVal = data[idx]
 			}
 		}
-		return max, nil
+		return maxVal, nil
 	default:
-		return 0, newOpError("calculateAggregation", fmt.Sprintf("unsupported operation: %s", operation))
+		return 0, newOpError("aggregateFloat64", fmt.Sprintf("unsupported operation: %s", operation))
 	}
 }
 

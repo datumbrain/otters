@@ -51,3 +51,30 @@ All notable changes to this project will be documented in this file.
 - `TestStatsOperations` — covers `Median`, `Var`, `Quantile`, `Describe`, `ValueCounts`, `Correlation`, and `NumericSummary`.
 - `TestCSVFileOperations` — covers `WriteCSV`/`ReadCSV` roundtrip, tab-delimited `WriteCSVWithOptions`/`ReadCSVWithOptions`, `DetectDelimiter`, `ValidateCSV` (valid and invalid files), headerless CSV, and `MaxRows` option.
 - `TestSentinelErrors` — asserts all five sentinel errors (`ErrColumnNotFound`, `ErrIndexOutOfRange`, `ErrTypeMismatch`, `ErrEmptyDataFrame`, `ErrInvalidOperation`) are non-nil, and covers `SafeOperation` and `MustOperation` behaviour.
+
+---
+
+## [Unreleased] — 2026-02-17 (P4 — Performance)
+
+### Performance improvements
+
+Benchmarks on 10,000-row DataFrame (Apple M2 Pro):
+
+| Operation | Before | After | Improvement |
+|---|---:|---:|---|
+| Filter | 275 µs / 20k allocs | 102 µs / **20 allocs** | **2.7× faster, 99.9% fewer allocs** |
+| GroupBy | 2,588 µs / 80k allocs | 865 µs / 30k allocs | **3× faster, 62% fewer allocs** |
+
+#### Changes
+
+- **Typed slice accessors** (`type.go`) — Added `GetInt64`, `GetFloat64`, `GetString`, `Int64Slice`, `Float64Slice`, `StringSlice` methods to `Series` for zero-allocation access to underlying data.
+
+- **Filter: typed comparison path** (`ops.go`) — Replaced per-row `series.Get(i)` + `evaluateCondition` (which boxed every value into `interface{}`) with `filterIndicesTyped`, which type-switches once and iterates the typed slice directly. Reduces Filter allocations from 20,000 to 20 on a 10k-row DataFrame.
+
+- **GroupBy: typed aggregation** (`ops.go`) — Rewrote `calculateAggregation` to access `Int64Slice()` / `Float64Slice()` directly instead of calling `Get()` per row. Added `aggregateInt64` and `aggregateFloat64` helpers that compute sum/mean/min/max in a single typed loop.
+
+- **GroupBy: optimized group building** (`ops.go`) — Pre-cache series pointers for grouping columns; replaced `fmt.Sprintf("%v", value)` with `strconv.FormatInt` / `strconv.FormatFloat`; reuse `strings.Builder` across rows.
+
+- **GroupBy: direct result construction** (`ops.go`) — Build result DataFrame with `NewDataFrameFromSeries` instead of going through `NewDataFrameFromMap`, avoiding map iteration and key sorting overhead.
+
+- **Unique: typed iteration** (`ops.go`) — Type-switch once, iterate typed slice directly, use `strconv` instead of `fmt.Sprintf` for key generation. Pre-allocate result slice with estimated capacity.

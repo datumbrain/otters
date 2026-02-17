@@ -108,6 +108,71 @@ func (s *Series) Get(index int) (interface{}, error) {
 	}
 }
 
+// GetInt64 returns the int64 value at the specified index without boxing.
+// Returns 0 and error if index is out of range or type mismatch.
+func (s *Series) GetInt64(index int) (int64, error) {
+	if index < 0 || index >= s.Length {
+		return 0, &OtterError{Op: "Series.GetInt64", Column: s.Name,
+			Message: fmt.Sprintf("index %d out of range [0:%d]", index, s.Length)}
+	}
+	if s.Type != Int64Type {
+		return 0, &OtterError{Op: "Series.GetInt64", Column: s.Name,
+			Message: fmt.Sprintf("type mismatch: expected int64, got %s", s.Type)}
+	}
+	return s.Data.([]int64)[index], nil
+}
+
+// GetFloat64 returns the float64 value at the specified index without boxing.
+func (s *Series) GetFloat64(index int) (float64, error) {
+	if index < 0 || index >= s.Length {
+		return 0, &OtterError{Op: "Series.GetFloat64", Column: s.Name,
+			Message: fmt.Sprintf("index %d out of range [0:%d]", index, s.Length)}
+	}
+	if s.Type != Float64Type {
+		return 0, &OtterError{Op: "Series.GetFloat64", Column: s.Name,
+			Message: fmt.Sprintf("type mismatch: expected float64, got %s", s.Type)}
+	}
+	return s.Data.([]float64)[index], nil
+}
+
+// GetString returns the string value at the specified index without boxing.
+func (s *Series) GetString(index int) (string, error) {
+	if index < 0 || index >= s.Length {
+		return "", &OtterError{Op: "Series.GetString", Column: s.Name,
+			Message: fmt.Sprintf("index %d out of range [0:%d]", index, s.Length)}
+	}
+	if s.Type != StringType {
+		return "", &OtterError{Op: "Series.GetString", Column: s.Name,
+			Message: fmt.Sprintf("type mismatch: expected string, got %s", s.Type)}
+	}
+	return s.Data.([]string)[index], nil
+}
+
+// Int64Slice returns the underlying []int64 data directly (no copy).
+// Returns nil if type is not Int64Type.
+func (s *Series) Int64Slice() []int64 {
+	if s.Type == Int64Type {
+		return s.Data.([]int64)
+	}
+	return nil
+}
+
+// Float64Slice returns the underlying []float64 data directly (no copy).
+func (s *Series) Float64Slice() []float64 {
+	if s.Type == Float64Type {
+		return s.Data.([]float64)
+	}
+	return nil
+}
+
+// StringSlice returns the underlying []string data directly (no copy).
+func (s *Series) StringSlice() []string {
+	if s.Type == StringType {
+		return s.Data.([]string)
+	}
+	return nil
+}
+
 // Set updates the value at the specified index
 func (s *Series) Set(index int, value interface{}) error {
 	if index < 0 || index >= s.Length {
