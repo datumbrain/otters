@@ -632,8 +632,16 @@ func (gb *GroupBy) aggregate(operation string) (*DataFrame, error) {
 		}
 	}
 
+	// Sort group keys for deterministic output order
+	sortedKeys := make([]string, 0, len(groups))
+	for k := range groups {
+		sortedKeys = append(sortedKeys, k)
+	}
+	sort.Strings(sortedKeys)
+
 	// Process each group
-	for _, g := range groups {
+	for _, k := range sortedKeys {
+		g := groups[k]
 		// Add group key values
 		for i, col := range gb.columns {
 			resultData[col] = append(resultData[col].([]string), g.values[i])

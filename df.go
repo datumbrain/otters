@@ -2,6 +2,7 @@ package otters
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -35,9 +36,16 @@ func NewDataFrameFromMap(data map[string]interface{}) (*DataFrame, error) {
 		return NewDataFrame(), nil
 	}
 
+	// Sort keys for deterministic column order
+	keys := make([]string, 0, len(data))
+	for k := range data {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
 	var series []*Series
-	for name, columnData := range data {
-		s, err := NewSeries(name, columnData)
+	for _, name := range keys {
+		s, err := NewSeries(name, data[name])
 		if err != nil {
 			return nil, wrapColumnError("NewDataFrameFromMap", name, err)
 		}
