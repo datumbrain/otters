@@ -364,51 +364,83 @@ func (df *DataFrame) SortBy(columns []string, ascending []bool) *DataFrame {
 
 // uniqueFromSeries extracts unique values from a series.
 func uniqueFromSeries(series *Series) []interface{} {
-	seen := make(map[string]bool, series.Length/4)
-	unique := make([]interface{}, 0, series.Length/4)
-
 	switch series.Type {
 	case StringType:
-		for _, v := range series.Data.([]string) {
-			if !seen[v] {
-				seen[v] = true
-				unique = append(unique, v)
-			}
-		}
+		return uniqueStrings(series.Data.([]string))
 	case Int64Type:
-		for _, v := range series.Data.([]int64) {
-			key := strconv.FormatInt(v, 10)
-			if !seen[key] {
-				seen[key] = true
-				unique = append(unique, v)
-			}
-		}
+		return uniqueInt64(series.Data.([]int64))
 	case Float64Type:
-		for _, v := range series.Data.([]float64) {
-			key := strconv.FormatFloat(v, 'g', -1, 64)
-			if !seen[key] {
-				seen[key] = true
-				unique = append(unique, v)
-			}
-		}
+		return uniqueFloat64(series.Data.([]float64))
 	case BoolType:
-		for _, v := range series.Data.([]bool) {
-			key := "false"
-			if v {
-				key = "true"
-			}
-			if !seen[key] {
-				seen[key] = true
-				unique = append(unique, v)
-			}
-		}
+		return uniqueBool(series.Data.([]bool))
 	case TimeType:
-		for _, v := range series.Data.([]time.Time) {
-			key := v.String()
-			if !seen[key] {
-				seen[key] = true
-				unique = append(unique, v)
-			}
+		return uniqueTime(series.Data.([]time.Time))
+	}
+	return nil
+}
+
+func uniqueStrings(data []string) []interface{} {
+	seen := make(map[string]bool, len(data)/4)
+	unique := make([]interface{}, 0, len(data)/4)
+	for _, v := range data {
+		if !seen[v] {
+			seen[v] = true
+			unique = append(unique, v)
+		}
+	}
+	return unique
+}
+
+func uniqueInt64(data []int64) []interface{} {
+	seen := make(map[string]bool, len(data)/4)
+	unique := make([]interface{}, 0, len(data)/4)
+	for _, v := range data {
+		key := strconv.FormatInt(v, 10)
+		if !seen[key] {
+			seen[key] = true
+			unique = append(unique, v)
+		}
+	}
+	return unique
+}
+
+func uniqueFloat64(data []float64) []interface{} {
+	seen := make(map[string]bool, len(data)/4)
+	unique := make([]interface{}, 0, len(data)/4)
+	for _, v := range data {
+		key := strconv.FormatFloat(v, 'g', -1, 64)
+		if !seen[key] {
+			seen[key] = true
+			unique = append(unique, v)
+		}
+	}
+	return unique
+}
+
+func uniqueBool(data []bool) []interface{} {
+	seen := make(map[string]bool, 2)
+	unique := make([]interface{}, 0, 2)
+	for _, v := range data {
+		key := "false"
+		if v {
+			key = "true"
+		}
+		if !seen[key] {
+			seen[key] = true
+			unique = append(unique, v)
+		}
+	}
+	return unique
+}
+
+func uniqueTime(data []time.Time) []interface{} {
+	seen := make(map[string]bool, len(data)/4)
+	unique := make([]interface{}, 0, len(data)/4)
+	for _, v := range data {
+		key := v.String()
+		if !seen[key] {
+			seen[key] = true
+			unique = append(unique, v)
 		}
 	}
 	return unique
@@ -535,43 +567,58 @@ func (gb *GroupBy) Max() (*DataFrame, error) {
 func selectSeriesRows(series *Series, indices []int) interface{} {
 	switch series.Type {
 	case StringType:
-		data := series.Data.([]string)
-		newSlice := make([]string, len(indices))
-		for i, idx := range indices {
-			newSlice[i] = data[idx]
-		}
-		return newSlice
+		return selectStringRows(series.Data.([]string), indices)
 	case Int64Type:
-		data := series.Data.([]int64)
-		newSlice := make([]int64, len(indices))
-		for i, idx := range indices {
-			newSlice[i] = data[idx]
-		}
-		return newSlice
+		return selectInt64Rows(series.Data.([]int64), indices)
 	case Float64Type:
-		data := series.Data.([]float64)
-		newSlice := make([]float64, len(indices))
-		for i, idx := range indices {
-			newSlice[i] = data[idx]
-		}
-		return newSlice
+		return selectFloat64Rows(series.Data.([]float64), indices)
 	case BoolType:
-		data := series.Data.([]bool)
-		newSlice := make([]bool, len(indices))
-		for i, idx := range indices {
-			newSlice[i] = data[idx]
-		}
-		return newSlice
+		return selectBoolRows(series.Data.([]bool), indices)
 	case TimeType:
-		data := series.Data.([]time.Time)
-		newSlice := make([]time.Time, len(indices))
-		for i, idx := range indices {
-			newSlice[i] = data[idx]
-		}
-		return newSlice
+		return selectTimeRows(series.Data.([]time.Time), indices)
 	default:
 		return nil
 	}
+}
+
+func selectStringRows(data []string, indices []int) []string {
+	newSlice := make([]string, len(indices))
+	for i, idx := range indices {
+		newSlice[i] = data[idx]
+	}
+	return newSlice
+}
+
+func selectInt64Rows(data []int64, indices []int) []int64 {
+	newSlice := make([]int64, len(indices))
+	for i, idx := range indices {
+		newSlice[i] = data[idx]
+	}
+	return newSlice
+}
+
+func selectFloat64Rows(data []float64, indices []int) []float64 {
+	newSlice := make([]float64, len(indices))
+	for i, idx := range indices {
+		newSlice[i] = data[idx]
+	}
+	return newSlice
+}
+
+func selectBoolRows(data []bool, indices []int) []bool {
+	newSlice := make([]bool, len(indices))
+	for i, idx := range indices {
+		newSlice[i] = data[idx]
+	}
+	return newSlice
+}
+
+func selectTimeRows(data []time.Time, indices []int) []time.Time {
+	newSlice := make([]time.Time, len(indices))
+	for i, idx := range indices {
+		newSlice[i] = data[idx]
+	}
+	return newSlice
 }
 
 // emptySliceForType returns an empty slice for the given column type.
@@ -633,58 +680,68 @@ func (df *DataFrame) selectRows(indices []int, operation string) *DataFrame {
 func compareValues(a, b interface{}, columnType ColumnType) int {
 	switch columnType {
 	case StringType:
-		aStr := a.(string)
-		bStr := b.(string)
-		if aStr < bStr {
-			return -1
-		} else if aStr > bStr {
-			return 1
-		}
-		return 0
-
+		return compareStrings(a.(string), b.(string))
 	case Int64Type:
-		aInt := a.(int64)
-		bInt := b.(int64)
-		if aInt < bInt {
-			return -1
-		} else if aInt > bInt {
-			return 1
-		}
-		return 0
-
+		return compareInt64(a.(int64), b.(int64))
 	case Float64Type:
-		aFloat := a.(float64)
-		bFloat := b.(float64)
-		if aFloat < bFloat {
-			return -1
-		} else if aFloat > bFloat {
-			return 1
-		}
-		return 0
-
+		return compareFloat64(a.(float64), b.(float64))
 	case BoolType:
-		aBool := a.(bool)
-		bBool := b.(bool)
-		if !aBool && bBool {
-			return -1
-		} else if aBool && !bBool {
-			return 1
-		}
-		return 0
-
+		return compareBool(a.(bool), b.(bool))
 	case TimeType:
-		aTime := a.(time.Time)
-		bTime := b.(time.Time)
-		if aTime.Before(bTime) {
-			return -1
-		} else if aTime.After(bTime) {
-			return 1
-		}
-		return 0
-
+		return compareTime(a.(time.Time), b.(time.Time))
 	default:
 		return 0
 	}
+}
+
+func compareStrings(a, b string) int {
+	if a < b {
+		return -1
+	}
+	if a > b {
+		return 1
+	}
+	return 0
+}
+
+func compareInt64(a, b int64) int {
+	if a < b {
+		return -1
+	}
+	if a > b {
+		return 1
+	}
+	return 0
+}
+
+func compareFloat64(a, b float64) int {
+	if a < b {
+		return -1
+	}
+	if a > b {
+		return 1
+	}
+	return 0
+}
+
+func compareBool(a, b bool) int {
+	if !a && b {
+		return -1
+	}
+	if a && !b {
+		return 1
+	}
+	return 0
+}
+
+func compareTime(a, b time.Time) int {
+	if a.Before(b) {
+		return -1
+	}
+	if a.After(b) {
+		return 1
+	}
+	return 0
 }
 
 // seriesValueToString extracts value at index i from series as string (no boxing).
@@ -756,33 +813,48 @@ func (gb *GroupBy) aggregate(operation string) (*DataFrame, error) {
 	}
 
 	groups := gb.buildGroups()
+	sortedKeys := sortGroupKeys(groups)
+	numGroups := len(sortedKeys)
 
-	numGroups := len(groups)
+	groupColData := allocateGroupColumns(gb.columns, numGroups)
+	numericCols := identifyNumericColumns(gb.df, gb.columns, numGroups)
 
-	// Sort group keys for deterministic output order
-	sortedKeys := make([]string, 0, numGroups)
+	if err := processGroups(gb, groups, sortedKeys, groupColData, numericCols, operation); err != nil {
+		return nil, err
+	}
+
+	return buildResultDataFrame(gb.columns, groupColData, numericCols)
+}
+
+func sortGroupKeys(groups map[string]*groupKey) []string {
+	sortedKeys := make([]string, 0, len(groups))
 	for k := range groups {
 		sortedKeys = append(sortedKeys, k)
 	}
 	sort.Strings(sortedKeys)
+	return sortedKeys
+}
 
-	// Pre-allocate result slices with exact capacity
-	groupColData := make([][]string, len(gb.columns))
-	for j := range gb.columns {
+func allocateGroupColumns(columns []string, numGroups int) [][]string {
+	groupColData := make([][]string, len(columns))
+	for j := range columns {
 		groupColData[j] = make([]string, 0, numGroups)
 	}
+	return groupColData
+}
 
-	// Identify numeric columns and pre-allocate their result slices
-	type numericCol struct {
-		name string
-		data []float64
-	}
+type numericCol struct {
+	name string
+	data []float64
+}
+
+func identifyNumericColumns(df *DataFrame, groupColumns []string, numGroups int) []numericCol {
 	var numericCols []numericCol
-	for _, colName := range gb.df.order {
-		if contains(gb.columns, colName) {
+	for _, colName := range df.order {
+		if contains(groupColumns, colName) {
 			continue
 		}
-		colType, _ := gb.df.GetColumnType(colName)
+		colType, _ := df.GetColumnType(colName)
 		if colType == Int64Type || colType == Float64Type {
 			numericCols = append(numericCols, numericCol{
 				name: colName,
@@ -790,34 +862,38 @@ func (gb *GroupBy) aggregate(operation string) (*DataFrame, error) {
 			})
 		}
 	}
+	return numericCols
+}
 
-	// Process each group
+func processGroups(gb *GroupBy, groups map[string]*groupKey, sortedKeys []string, groupColData [][]string, numericCols []numericCol, operation string) error {
 	for _, k := range sortedKeys {
 		g := groups[k]
-		// Add group key values
 		for j := range gb.columns {
 			groupColData[j] = append(groupColData[j], g.values[j])
 		}
 
-		// Calculate aggregations for numeric columns
 		for i := range numericCols {
 			aggValue, err := gb.calculateAggregation(numericCols[i].name, g.indices, operation)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			numericCols[i].data = append(numericCols[i].data, aggValue)
 		}
 	}
+	return nil
+}
 
-	// Build result DataFrame directly with NewDataFrameFromSeries (avoids map overhead)
-	resultSeries := make([]*Series, 0, len(gb.columns)+len(numericCols))
-	for j, col := range gb.columns {
+func buildResultDataFrame(columns []string, groupColData [][]string, numericCols []numericCol) (*DataFrame, error) {
+	resultSeries := make([]*Series, 0, len(columns)+len(numericCols))
+
+	for j, col := range columns {
 		s, err := NewSeries(col, groupColData[j])
 		if err != nil {
 			return nil, err
 		}
 		resultSeries = append(resultSeries, s)
 	}
+
 	for _, nc := range numericCols {
 		s, err := NewSeries(nc.name, nc.data)
 		if err != nil {
@@ -856,38 +932,50 @@ func aggregateInt64(data []int64, indices []int, operation string) (float64, err
 	n := len(indices)
 	switch operation {
 	case "sum":
-		var sum int64
-		for _, idx := range indices {
-			sum += data[idx]
-		}
-		return float64(sum), nil
+		return sumInt64(data, indices), nil
 	case "mean":
-		var sum int64
-		for _, idx := range indices {
-			sum += data[idx]
-		}
-		return float64(sum) / float64(n), nil
+		return meanInt64(data, indices), nil
 	case "count":
 		return float64(n), nil
 	case "min":
-		minVal := data[indices[0]]
-		for _, idx := range indices[1:] {
-			if data[idx] < minVal {
-				minVal = data[idx]
-			}
-		}
-		return float64(minVal), nil
+		return minInt64(data, indices), nil
 	case "max":
-		maxVal := data[indices[0]]
-		for _, idx := range indices[1:] {
-			if data[idx] > maxVal {
-				maxVal = data[idx]
-			}
-		}
-		return float64(maxVal), nil
+		return maxInt64(data, indices), nil
 	default:
 		return 0, newOpError("aggregateInt64", fmt.Sprintf("unsupported operation: %s", operation))
 	}
+}
+
+func sumInt64(data []int64, indices []int) float64 {
+	var sum int64
+	for _, idx := range indices {
+		sum += data[idx]
+	}
+	return float64(sum)
+}
+
+func meanInt64(data []int64, indices []int) float64 {
+	return sumInt64(data, indices) / float64(len(indices))
+}
+
+func minInt64(data []int64, indices []int) float64 {
+	minVal := data[indices[0]]
+	for _, idx := range indices[1:] {
+		if data[idx] < minVal {
+			minVal = data[idx]
+		}
+	}
+	return float64(minVal)
+}
+
+func maxInt64(data []int64, indices []int) float64 {
+	maxVal := data[indices[0]]
+	for _, idx := range indices[1:] {
+		if data[idx] > maxVal {
+			maxVal = data[idx]
+		}
+	}
+	return float64(maxVal)
 }
 
 // aggregateFloat64 computes aggregation on float64 slice for given indices.
@@ -895,38 +983,50 @@ func aggregateFloat64(data []float64, indices []int, operation string) (float64,
 	n := len(indices)
 	switch operation {
 	case "sum":
-		var sum float64
-		for _, idx := range indices {
-			sum += data[idx]
-		}
-		return sum, nil
+		return sumFloat64(data, indices), nil
 	case "mean":
-		var sum float64
-		for _, idx := range indices {
-			sum += data[idx]
-		}
-		return sum / float64(n), nil
+		return meanFloat64(data, indices), nil
 	case "count":
 		return float64(n), nil
 	case "min":
-		minVal := data[indices[0]]
-		for _, idx := range indices[1:] {
-			if data[idx] < minVal {
-				minVal = data[idx]
-			}
-		}
-		return minVal, nil
+		return minFloat64(data, indices), nil
 	case "max":
-		maxVal := data[indices[0]]
-		for _, idx := range indices[1:] {
-			if data[idx] > maxVal {
-				maxVal = data[idx]
-			}
-		}
-		return maxVal, nil
+		return maxFloat64(data, indices), nil
 	default:
 		return 0, newOpError("aggregateFloat64", fmt.Sprintf("unsupported operation: %s", operation))
 	}
+}
+
+func sumFloat64(data []float64, indices []int) float64 {
+	var sum float64
+	for _, idx := range indices {
+		sum += data[idx]
+	}
+	return sum
+}
+
+func meanFloat64(data []float64, indices []int) float64 {
+	return sumFloat64(data, indices) / float64(len(indices))
+}
+
+func minFloat64(data []float64, indices []int) float64 {
+	minVal := data[indices[0]]
+	for _, idx := range indices[1:] {
+		if data[idx] < minVal {
+			minVal = data[idx]
+		}
+	}
+	return minVal
+}
+
+func maxFloat64(data []float64, indices []int) float64 {
+	maxVal := data[indices[0]]
+	for _, idx := range indices[1:] {
+		if data[idx] > maxVal {
+			maxVal = data[idx]
+		}
+	}
+	return maxVal
 }
 
 // contains checks if a slice contains a string
