@@ -312,42 +312,35 @@ func InferType(values []string) ColumnType {
 
 	for _, value := range values {
 		value = strings.TrimSpace(value)
-
-		// Skip empty values in type inference
 		if value == "" {
 			continue
 		}
 
-		// Check int64
-		if canBeInt {
-			if _, err := strconv.ParseInt(value, 10, 64); err != nil {
-				canBeInt = false
-			}
-		}
-
-		// Check float64
-		if canBeFloat {
-			if _, err := strconv.ParseFloat(value, 64); err != nil {
-				canBeFloat = false
-			}
-		}
-
-		// Check bool
-		if canBeBool {
-			if _, err := strconv.ParseBool(value); err != nil {
-				canBeBool = false
-			}
-		}
-
-		// Check time (common formats)
-		if canBeTime {
-			if !isTimeValue(value) {
-				canBeTime = false
-			}
-		}
+		canBeInt = canBeInt && canParseInt64(value)
+		canBeFloat = canBeFloat && canParseFloat64(value)
+		canBeBool = canBeBool && canParseBool(value)
+		canBeTime = canBeTime && isTimeValue(value)
 	}
 
-	// Return the most specific type possible
+	return selectMostSpecificType(canBeBool, canBeInt, canBeFloat, canBeTime)
+}
+
+func canParseInt64(value string) bool {
+	_, err := strconv.ParseInt(value, 10, 64)
+	return err == nil
+}
+
+func canParseFloat64(value string) bool {
+	_, err := strconv.ParseFloat(value, 64)
+	return err == nil
+}
+
+func canParseBool(value string) bool {
+	_, err := strconv.ParseBool(value)
+	return err == nil
+}
+
+func selectMostSpecificType(canBeBool, canBeInt, canBeFloat, canBeTime bool) ColumnType {
 	if canBeBool {
 		return BoolType
 	}
@@ -388,76 +381,92 @@ func isTimeValue(value string) bool {
 func ConvertValue(value string, targetType ColumnType) (interface{}, error) {
 	value = strings.TrimSpace(value)
 
-	// Handle empty values
 	if value == "" {
-		switch targetType {
-		case StringType:
-			return "", nil
-		case Int64Type:
-			return int64(0), nil
-		case Float64Type:
-			return float64(0), nil
-		case BoolType:
-			return false, nil
-		case TimeType:
-			return time.Time{}, nil
-		}
+		return getZeroValue(targetType), nil
 	}
 
 	switch targetType {
 	case StringType:
 		return value, nil
-
 	case Int64Type:
-		val, err := strconv.ParseInt(value, 10, 64)
-		if err != nil {
-			return nil, &OtterError{
-				Op:      "ConvertValue",
-				Message: fmt.Sprintf("cannot convert '%s' to int64: %v", value, err),
-				Cause:   err,
-			}
-		}
-		return val, nil
-
+		return convertValueToInt64(value)
 	case Float64Type:
-		val, err := strconv.ParseFloat(value, 64)
-		if err != nil {
-			return nil, &OtterError{
-				Op:      "ConvertValue",
-				Message: fmt.Sprintf("cannot convert '%s' to float64: %v", value, err),
-				Cause:   err,
-			}
-		}
-		return val, nil
-
+		return convertValueToFloat64(value)
 	case BoolType:
-		val, err := strconv.ParseBool(value)
-		if err != nil {
-			return nil, &OtterError{
-				Op:      "ConvertValue",
-				Message: fmt.Sprintf("cannot convert '%s' to bool: %v", value, err),
-				Cause:   err,
-			}
-		}
-		return val, nil
-
+		return convertValueToBool(value)
 	case TimeType:
-		val, err := parseTimeValue(value)
-		if err != nil {
-			return nil, &OtterError{
-				Op:      "ConvertValue",
-				Message: fmt.Sprintf("cannot convert '%s' to time: %v", value, err),
-				Cause:   err,
-			}
-		}
-		return val, nil
-
+		return convertValueToTime(value)
 	default:
 		return nil, &OtterError{
 			Op:      "ConvertValue",
 			Message: fmt.Sprintf("unknown target type: %v", targetType),
 		}
 	}
+}
+
+func getZeroValue(targetType ColumnType) interface{} {
+	switch targetType {
+	case StringType:
+		return ""
+	case Int64Type:
+		return int64(0)
+	case Float64Type:
+		return float64(0)
+	case BoolType:
+		return false
+	case TimeType:
+		return time.Time{}
+	default:
+		return nil
+	}
+}
+
+func convertValueToInt64(value string) (int64, error) {
+	val, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return 0, &OtterError{
+			Op:      "ConvertValue",
+			Message: fmt.Sprintf("cannot convert '%s' to int64: %v", value, err),
+			Cause:   err,
+		}
+	}
+	return val, nil
+}
+
+func convertValueToFloat64(value string) (float64, error) {
+	val, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return 0, &OtterError{
+			Op:      "ConvertValue",
+			Message: fmt.Sprintf("cannot convert '%s' to float64: %v", value, err),
+			Cause:   err,
+		}
+	}
+	return val, nil
+}
+
+func convertValueToBool(value string) (bool, error) {
+	val, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, &OtterError{
+			Op:      "ConvertValue",
+			Message: fmt.Sprintf("cannot convert '%s' to bool: %v", value, err),
+			Cause:   err,
+		}
+	}
+	return val, nil
+}
+
+func convertValueToTime(value string) (time.Time, error) {
+	val, err := parseTimeValue(value)
+	if err != nil {
+		return time.Time{}, &OtterError{
+			Op:      "ConvertValue",
+			Message: fmt.Sprintf("cannot convert '%s' to time: %v", value, err),
+			Cause:   err,
+		}
+	}
+	return val, nil
 }
 
 // parseTimeValue attempts to parse a time string using common formats

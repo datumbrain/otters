@@ -22,108 +22,129 @@ func ReadCSV(filename string) (*DataFrame, error) {
 
 // ReadCSVWithOptions reads a CSV file with custom options
 func ReadCSVWithOptions(filename string, options CSVOptions) (*DataFrame, error) {
-	// Open the file
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, wrapError("ReadCSV", err)
 	}
 	defer file.Close()
 
-	// Create CSV reader
 	reader := csv.NewReader(file)
 	reader.Comma = options.Delimiter
 	reader.TrimLeadingSpace = true
 
-	// Skip initial rows if specified
-	for i := 0; i < options.SkipRows; i++ {
+	if err := skipRows(reader, options.SkipRows, "ReadCSV"); err != nil {
+		return nil, err
+	}
+
+	headers, rows, err := readCSVData(reader, options, "ReadCSV")
+	if err != nil {
+		return nil, err
+	}
+
+	return buildDataFrameFromRows(headers, rows)
+}
+
+func skipRows(reader *csv.Reader, skipCount int, operation string) error {
+	for i := 0; i < skipCount; i++ {
 		if _, err := reader.Read(); err != nil {
 			if err == io.EOF {
-				return NewDataFrame(), nil // Empty file after skipping
+				return nil
 			}
-			return nil, wrapError("ReadCSV", err)
+			return wrapError(operation, err)
 		}
 	}
+	return nil
+}
 
-	// Read headers
-	var headers []string
+func readCSVData(reader *csv.Reader, options CSVOptions, operation string) ([]string, [][]string, error) {
 	if options.HasHeader {
-		headers, err = reader.Read()
-		if err != nil {
-			if err == io.EOF {
-				return NewDataFrame(), nil // Empty file
-			}
-			return nil, wrapError("ReadCSV", err)
-		}
+		return readCSVWithHeaders(reader, options, operation)
+	}
+	return readCSVWithoutHeaders(reader, options, operation)
+}
 
-		// Clean headers (remove BOM, trim spaces)
-		for i, header := range headers {
-			headers[i] = cleanHeader(header)
+func readCSVWithHeaders(reader *csv.Reader, options CSVOptions, operation string) ([]string, [][]string, error) {
+	headers, err := reader.Read()
+	if err != nil {
+		if err == io.EOF {
+			return nil, nil, nil
 		}
-	} else {
-		// Read first row to determine number of columns
-		firstRow, err := reader.Read()
-		if err != nil {
-			if err == io.EOF {
-				return NewDataFrame(), nil
-			}
-			return nil, wrapError("ReadCSV", err)
-		}
-
-		// Generate column names
-		for i := 0; i < len(firstRow); i++ {
-			headers = append(headers, fmt.Sprintf("Column_%d", i))
-		}
-
-		// Put the first row back (we'll read it again)
-		// Note: CSV reader doesn't support seeking, so we'll handle this differently
-		allRows := [][]string{firstRow}
-		for {
-			row, err := reader.Read()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				return nil, wrapError("ReadCSV", err)
-			}
-			allRows = append(allRows, row)
-
-			// Check max rows limit
-			if options.MaxRows > 0 && len(allRows) >= options.MaxRows {
-				break
-			}
-		}
-
-		return buildDataFrameFromRows(headers, allRows)
+		return nil, nil, wrapError(operation, err)
 	}
 
-	// Read all data rows
-	var rows [][]string
-	rowCount := 0
+	for i, header := range headers {
+		headers[i] = cleanHeader(header)
+	}
+
+	rows, err := readDataRows(reader, headers, options, operation)
+	return headers, rows, err
+}
+
+func readCSVWithoutHeaders(reader *csv.Reader, options CSVOptions, operation string) ([]string, [][]string, error) {
+	firstRow, err := reader.Read()
+	if err != nil {
+		if err == io.EOF {
+			return nil, nil, nil
+		}
+		return nil, nil, wrapError(operation, err)
+	}
+
+	headers := generateHeaders(len(firstRow))
+	allRows := [][]string{firstRow}
+
 	for {
 		row, err := reader.Read()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return nil, wrapError("ReadCSV", err)
+			return nil, nil, wrapError(operation, err)
+		}
+		allRows = append(allRows, row)
+
+		if options.MaxRows > 0 && len(allRows) >= options.MaxRows {
+			break
+		}
+	}
+
+	return headers, allRows, nil
+}
+
+func generateHeaders(count int) []string {
+	headers := make([]string, count)
+	for i := 0; i < count; i++ {
+		headers[i] = fmt.Sprintf("Column_%d", i)
+	}
+	return headers
+}
+
+func readDataRows(reader *csv.Reader, headers []string, options CSVOptions, operation string) ([][]string, error) {
+	var rows [][]string
+	rowCount := 0
+
+	for {
+		row, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, wrapError(operation, err)
 		}
 
-		// Validate row length matches headers
 		if len(row) != len(headers) {
-			return nil, newOpError("ReadCSV",
+			return nil, newOpError(operation,
 				fmt.Sprintf("row %d has %d columns, expected %d", rowCount+1, len(row), len(headers)))
 		}
 
 		rows = append(rows, row)
 		rowCount++
 
-		// Check max rows limit
 		if options.MaxRows > 0 && rowCount >= options.MaxRows {
 			break
 		}
 	}
 
-	return buildDataFrameFromRows(headers, rows)
+	return rows, nil
 }
 
 // WriteCSV writes a DataFrame to a CSV file
@@ -194,66 +215,13 @@ func ReadCSVFromStringWithOptions(data string, options CSVOptions) (*DataFrame, 
 	reader.Comma = options.Delimiter
 	reader.TrimLeadingSpace = true
 
-	// Skip initial rows if specified
-	for i := 0; i < options.SkipRows; i++ {
-		if _, err := reader.Read(); err != nil {
-			if err == io.EOF {
-				return NewDataFrame(), nil
-			}
-			return nil, wrapError("ReadCSVFromString", err)
-		}
+	if err := skipRows(reader, options.SkipRows, "ReadCSVFromString"); err != nil {
+		return nil, err
 	}
 
-	// Read headers
-	var headers []string
-	if options.HasHeader {
-		var err error
-		headers, err = reader.Read()
-		if err != nil {
-			if err == io.EOF {
-				return NewDataFrame(), nil
-			}
-			return nil, wrapError("ReadCSVFromString", err)
-		}
-
-		// Clean headers
-		for i, header := range headers {
-			headers[i] = cleanHeader(header)
-		}
-	}
-
-	// Read all data rows
-	var rows [][]string
-	rowCount := 0
-	for {
-		row, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, wrapError("ReadCSVFromString", err)
-		}
-
-		// Generate headers if needed
-		if !options.HasHeader && headers == nil {
-			for i := 0; i < len(row); i++ {
-				headers = append(headers, fmt.Sprintf("Column_%d", i))
-			}
-		}
-
-		// Validate row length
-		if len(row) != len(headers) {
-			return nil, newOpError("ReadCSVFromString",
-				fmt.Sprintf("row %d has %d columns, expected %d", rowCount+1, len(row), len(headers)))
-		}
-
-		rows = append(rows, row)
-		rowCount++
-
-		// Check max rows limit
-		if options.MaxRows > 0 && rowCount >= options.MaxRows {
-			break
-		}
+	headers, rows, err := readCSVData(reader, options, "ReadCSVFromString")
+	if err != nil {
+		return nil, err
 	}
 
 	return buildDataFrameFromRows(headers, rows)
