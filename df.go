@@ -31,7 +31,7 @@ func NewDataFrameFromSeries(series ...*Series) (*DataFrame, error) {
 }
 
 // NewDataFrameFromMap creates a DataFrame from a map of column data
-func NewDataFrameFromMap(data map[string]interface{}) (*DataFrame, error) {
+func NewDataFrameFromMap(data map[string]any) (*DataFrame, error) {
 	if len(data) == 0 {
 		return NewDataFrame(), nil
 	}
@@ -157,7 +157,7 @@ func (df *DataFrame) Tail(n int) *DataFrame {
 }
 
 // Get returns the value at the specified row and column
-func (df *DataFrame) Get(row int, column string) (interface{}, error) {
+func (df *DataFrame) Get(row int, column string) (any, error) {
 	if df.err != nil {
 		return nil, df.err
 	}
@@ -174,7 +174,7 @@ func (df *DataFrame) Get(row int, column string) (interface{}, error) {
 }
 
 // Set updates the value at the specified row and column
-func (df *DataFrame) Set(row int, column string, value interface{}) error {
+func (df *DataFrame) Set(row int, column string, value any) error {
 	if df.err != nil {
 		return df.err
 	}
@@ -332,12 +332,9 @@ func (df *DataFrame) String() string {
 	sb.WriteString("\n")
 
 	// Write data (show first 10 rows max for display)
-	maxRows := df.length
-	if maxRows > 10 {
-		maxRows = 10
-	}
+	maxRows := min(df.length, 10)
 
-	for i := 0; i < maxRows; i++ {
+	for i := range maxRows {
 		var row []string
 		for _, colName := range df.order {
 			value, _ := df.columns[colName].Get(i)
@@ -348,7 +345,7 @@ func (df *DataFrame) String() string {
 	}
 
 	if df.length > 10 {
-		sb.WriteString(fmt.Sprintf("... (%d more rows)\n", df.length-10))
+		fmt.Fprintf(&sb, "... (%d more rows)\n", df.length-10)
 	}
 
 	return sb.String()
@@ -362,12 +359,12 @@ func (df *DataFrame) Info() string {
 
 	var sb strings.Builder
 	sb.WriteString("DataFrame Info:\n")
-	sb.WriteString(fmt.Sprintf("  Shape: (%d, %d)\n", df.length, len(df.columns)))
+	fmt.Fprintf(&sb, "  Shape: (%d, %d)\n", df.length, len(df.columns))
 	sb.WriteString("  Columns:\n")
 
 	for _, colName := range df.order {
 		series := df.columns[colName]
-		sb.WriteString(fmt.Sprintf("    %s: %s\n", colName, series.Type.String()))
+		fmt.Fprintf(&sb, "    %s: %s\n", colName, series.Type.String())
 	}
 
 	return sb.String()
@@ -394,7 +391,7 @@ func (df *DataFrame) slice(start, end int, operation string) *DataFrame {
 
 	for _, colName := range df.order {
 		series := df.columns[colName]
-		var newData interface{}
+		var newData any
 
 		// Slice the appropriate data type
 		switch series.Type {

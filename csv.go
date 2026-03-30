@@ -45,7 +45,7 @@ func ReadCSVWithOptions(filename string, options CSVOptions) (*DataFrame, error)
 }
 
 func skipRows(reader *csv.Reader, skipCount int, operation string) error {
-	for i := 0; i < skipCount; i++ {
+	for range skipCount {
 		if _, err := reader.Read(); err != nil {
 			if err == io.EOF {
 				return nil
@@ -112,7 +112,7 @@ func readCSVWithoutHeaders(reader *csv.Reader, options CSVOptions, operation str
 
 func generateHeaders(count int) []string {
 	headers := make([]string, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		headers[i] = fmt.Sprintf("Column_%d", i)
 	}
 	return headers
@@ -137,7 +137,7 @@ func readDataRows(reader *csv.Reader, headers []string, options CSVOptions, oper
 		}
 
 		rows = append(rows, row)
-		rowCount++
+		rowCount += 1
 
 		if options.MaxRows > 0 && rowCount >= options.MaxRows {
 			break
@@ -181,7 +181,7 @@ func (df *DataFrame) WriteCSVWithOptions(filename string, options CSVOptions) er
 	}
 
 	// Write data rows
-	for i := 0; i < df.length; i++ {
+	for i := range df.length {
 		var row []string
 		for _, colName := range df.order {
 			value, err := df.columns[colName].Get(i)
@@ -289,7 +289,7 @@ func buildDataFrameFromRows(headers []string, rows [][]string) (*DataFrame, erro
 }
 
 // convertStringSliceToType converts a slice of strings to the specified type
-func convertStringSliceToType(values []string, targetType ColumnType) (interface{}, error) {
+func convertStringSliceToType(values []string, targetType ColumnType) (any, error) {
 	switch targetType {
 	case StringType:
 		// Return a copy to avoid external modification
@@ -367,7 +367,7 @@ func cleanHeader(header string) string {
 }
 
 // formatValueForCSV formats a value for CSV output
-func formatValueForCSV(value interface{}) string {
+func formatValueForCSV(value any) string {
 	switch v := value.(type) {
 	case string:
 		return v
@@ -479,7 +479,7 @@ func ValidateCSV(filename string) (*CSVInfo, error) {
 					info.Rows+1, info.Columns, len(row)))
 		}
 
-		info.Rows++
+		info.Rows += 1
 	}
 
 	return info, nil

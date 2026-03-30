@@ -9,7 +9,7 @@ import (
 )
 
 // Filter creates a new DataFrame with rows that match the condition
-func (df *DataFrame) Filter(column, operator string, value interface{}) *DataFrame {
+func (df *DataFrame) Filter(column, operator string, value any) *DataFrame {
 	if df.err != nil {
 		return df
 	}
@@ -30,11 +30,11 @@ func (df *DataFrame) Filter(column, operator string, value interface{}) *DataFra
 		return df.setError(wrapColumnError("Filter", column, err))
 	}
 
-	return df.selectRows(matchingIndices, "Filter")
+	return df.SelectRows(matchingIndices, "Filter")
 }
 
 // filterIndicesTyped returns matching indices using typed slice access to avoid boxing.
-func filterIndicesTyped(series *Series, operator string, value interface{}) ([]int, error) {
+func filterIndicesTyped(series *Series, operator string, value any) ([]int, error) {
 	switch series.Type {
 	case Int64Type:
 		return filterInt64Indices(series.Data.([]int64), operator, value)
@@ -50,7 +50,7 @@ func filterIndicesTyped(series *Series, operator string, value interface{}) ([]i
 	return nil, nil
 }
 
-func filterInt64Indices(data []int64, op string, value interface{}) ([]int, error) {
+func filterInt64Indices(data []int64, op string, value any) ([]int, error) {
 	cmp, ok := toInt64(value)
 	if !ok {
 		return nil, newOpError("Filter", fmt.Sprintf("cannot convert %T to int64", value))
@@ -64,7 +64,7 @@ func filterInt64Indices(data []int64, op string, value interface{}) ([]int, erro
 	return indices, nil
 }
 
-func filterFloat64Indices(data []float64, op string, value interface{}) ([]int, error) {
+func filterFloat64Indices(data []float64, op string, value any) ([]int, error) {
 	cmp, ok := toFloat64(value)
 	if !ok {
 		return nil, newOpError("Filter", fmt.Sprintf("cannot convert %T to float64", value))
@@ -78,7 +78,7 @@ func filterFloat64Indices(data []float64, op string, value interface{}) ([]int, 
 	return indices, nil
 }
 
-func filterStringIndices(data []string, op string, value interface{}) ([]int, error) {
+func filterStringIndices(data []string, op string, value any) ([]int, error) {
 	cmp, ok := value.(string)
 	if !ok {
 		cmp = fmt.Sprintf("%v", value)
@@ -92,7 +92,7 @@ func filterStringIndices(data []string, op string, value interface{}) ([]int, er
 	return indices, nil
 }
 
-func filterBoolIndices(data []bool, op string, value interface{}) ([]int, error) {
+func filterBoolIndices(data []bool, op string, value any) ([]int, error) {
 	cmp, ok := value.(bool)
 	if !ok {
 		return nil, newOpError("Filter", fmt.Sprintf("cannot convert %T to bool", value))
@@ -106,7 +106,7 @@ func filterBoolIndices(data []bool, op string, value interface{}) ([]int, error)
 	return indices, nil
 }
 
-func filterTimeIndices(data []time.Time, op string, value interface{}) ([]int, error) {
+func filterTimeIndices(data []time.Time, op string, value any) ([]int, error) {
 	cmp, ok := value.(time.Time)
 	if !ok {
 		return nil, newOpError("Filter", fmt.Sprintf("cannot convert %T to time.Time", value))
@@ -120,7 +120,7 @@ func filterTimeIndices(data []time.Time, op string, value interface{}) ([]int, e
 	return indices, nil
 }
 
-func toInt64(v interface{}) (int64, bool) {
+func toInt64(v any) (int64, bool) {
 	switch x := v.(type) {
 	case int64:
 		return x, true
@@ -132,7 +132,7 @@ func toInt64(v interface{}) (int64, bool) {
 	return 0, false
 }
 
-func toFloat64(v interface{}) (float64, bool) {
+func toFloat64(v any) (float64, bool) {
 	switch x := v.(type) {
 	case float64:
 		return x, true
@@ -359,11 +359,11 @@ func (df *DataFrame) SortBy(columns []string, ascending []bool) *DataFrame {
 	})
 
 	// Create new DataFrame with sorted rows
-	return df.selectRows(indices, "SortBy")
+	return df.SelectRows(indices, "SortBy")
 }
 
 // uniqueFromSeries extracts unique values from a series.
-func uniqueFromSeries(series *Series) []interface{} {
+func uniqueFromSeries(series *Series) []any {
 	switch series.Type {
 	case StringType:
 		return uniqueStrings(series.Data.([]string))
@@ -379,9 +379,9 @@ func uniqueFromSeries(series *Series) []interface{} {
 	return nil
 }
 
-func uniqueStrings(data []string) []interface{} {
+func uniqueStrings(data []string) []any {
 	seen := make(map[string]bool, len(data)/4)
-	unique := make([]interface{}, 0, len(data)/4)
+	unique := make([]any, 0, len(data)/4)
 	for _, v := range data {
 		if !seen[v] {
 			seen[v] = true
@@ -391,9 +391,9 @@ func uniqueStrings(data []string) []interface{} {
 	return unique
 }
 
-func uniqueInt64(data []int64) []interface{} {
+func uniqueInt64(data []int64) []any {
 	seen := make(map[string]bool, len(data)/4)
-	unique := make([]interface{}, 0, len(data)/4)
+	unique := make([]any, 0, len(data)/4)
 	for _, v := range data {
 		key := strconv.FormatInt(v, 10)
 		if !seen[key] {
@@ -404,9 +404,9 @@ func uniqueInt64(data []int64) []interface{} {
 	return unique
 }
 
-func uniqueFloat64(data []float64) []interface{} {
+func uniqueFloat64(data []float64) []any {
 	seen := make(map[string]bool, len(data)/4)
-	unique := make([]interface{}, 0, len(data)/4)
+	unique := make([]any, 0, len(data)/4)
 	for _, v := range data {
 		key := strconv.FormatFloat(v, 'g', -1, 64)
 		if !seen[key] {
@@ -417,9 +417,9 @@ func uniqueFloat64(data []float64) []interface{} {
 	return unique
 }
 
-func uniqueBool(data []bool) []interface{} {
+func uniqueBool(data []bool) []any {
 	seen := make(map[string]bool, 2)
-	unique := make([]interface{}, 0, 2)
+	unique := make([]any, 0, 2)
 	for _, v := range data {
 		key := "false"
 		if v {
@@ -433,9 +433,9 @@ func uniqueBool(data []bool) []interface{} {
 	return unique
 }
 
-func uniqueTime(data []time.Time) []interface{} {
+func uniqueTime(data []time.Time) []any {
 	seen := make(map[string]bool, len(data)/4)
-	unique := make([]interface{}, 0, len(data)/4)
+	unique := make([]any, 0, len(data)/4)
 	for _, v := range data {
 		key := v.String()
 		if !seen[key] {
@@ -447,7 +447,7 @@ func uniqueTime(data []time.Time) []interface{} {
 }
 
 // Unique returns unique values from a specified column
-func (df *DataFrame) Unique(column string) ([]interface{}, error) {
+func (df *DataFrame) Unique(column string) ([]any, error) {
 	if df.err != nil {
 		return nil, df.err
 	}
@@ -479,7 +479,7 @@ func (df *DataFrame) GroupBy(columns ...string) *GroupBy {
 }
 
 // Where is an alias for Filter (Pandas compatibility)
-func (df *DataFrame) Where(column, operator string, value interface{}) *DataFrame {
+func (df *DataFrame) Where(column, operator string, value any) *DataFrame {
 	return df.Filter(column, operator, value)
 }
 
@@ -564,7 +564,7 @@ func (gb *GroupBy) Max() (*DataFrame, error) {
 // Internal helper methods
 
 // selectSeriesRows extracts rows at indices from a series, returning new data slice.
-func selectSeriesRows(series *Series, indices []int) interface{} {
+func selectSeriesRows(series *Series, indices []int) any {
 	switch series.Type {
 	case StringType:
 		return selectStringRows(series.Data.([]string), indices)
@@ -622,7 +622,7 @@ func selectTimeRows(data []time.Time, indices []int) []time.Time {
 }
 
 // emptySliceForType returns an empty slice for the given column type.
-func emptySliceForType(colType ColumnType) interface{} {
+func emptySliceForType(colType ColumnType) any {
 	switch colType {
 	case StringType:
 		return []string{}
@@ -639,8 +639,8 @@ func emptySliceForType(colType ColumnType) interface{} {
 	}
 }
 
-// selectRows creates a new DataFrame with rows at the specified indices
-func (df *DataFrame) selectRows(indices []int, operation string) *DataFrame {
+// SelectRows creates a new DataFrame with rows at the specified indices
+func (df *DataFrame) SelectRows(indices []int, operation string) *DataFrame {
 	if len(indices) == 0 {
 		newDf := NewDataFrame()
 		for _, colName := range df.order {
@@ -677,7 +677,7 @@ func (df *DataFrame) selectRows(indices []int, operation string) *DataFrame {
 }
 
 // compareValues compares two values of the same type, returns -1, 0, or 1
-func compareValues(a, b interface{}, columnType ColumnType) int {
+func compareValues(a, b any, columnType ColumnType) int {
 	switch columnType {
 	case StringType:
 		return compareStrings(a.(string), b.(string))
@@ -784,7 +784,7 @@ func (gb *GroupBy) buildGroups() map[string]*groupKey {
 	var key strings.Builder
 	key.Grow(64)
 
-	for i := 0; i < gb.df.length; i++ {
+	for i := range gb.df.length {
 		key.Reset()
 		values := make([]string, len(gb.columns))
 		for j, series := range groupSeries {
@@ -906,7 +906,7 @@ func buildResultDataFrame(columns []string, groupColData [][]string, numericCols
 }
 
 // calculateAggregation calculates aggregation for a column and indices.
-// Optimized to access typed slices directly, avoiding per-row interface{} boxing.
+// Optimized to access typed slices directly, avoiding per-row any boxing.
 func (gb *GroupBy) calculateAggregation(column string, indices []int, operation string) (float64, error) {
 	series := gb.df.columns[column]
 	n := len(indices)

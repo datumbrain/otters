@@ -6,7 +6,7 @@ import (
 )
 
 func TestDataFrame_Count(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3, 4, 5},
 		"col2": []float64{1.1, 2.2, 3.3, 4.4, 5.5},
 	}
@@ -49,7 +49,7 @@ func TestDataFrame_SumEdgeCases(t *testing.T) {
 		t.Error("Sum() should error on empty DataFrame")
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"text": []string{"a", "b", "c"},
 	}
 	df, _ := NewDataFrameFromMap(data)
@@ -66,7 +66,7 @@ func TestDataFrame_MeanEdgeCases(t *testing.T) {
 		t.Error("Mean() should error on empty DataFrame")
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3},
 	}
 	df, _ := NewDataFrameFromMap(data)
@@ -86,7 +86,7 @@ func TestDataFrame_MinEdgeCases(t *testing.T) {
 		t.Error("Min() should error on empty DataFrame")
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []float64{5.5, 2.2, 8.8, 1.1},
 	}
 	df, _ := NewDataFrameFromMap(data)
@@ -106,7 +106,7 @@ func TestDataFrame_MaxEdgeCases(t *testing.T) {
 		t.Error("Max() should error on empty DataFrame")
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []float64{5.5, 2.2, 8.8, 1.1},
 	}
 	df, _ := NewDataFrameFromMap(data)
@@ -126,7 +126,7 @@ func TestDataFrame_StdEdgeCases(t *testing.T) {
 		t.Error("Std() should error on empty DataFrame")
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3},
 	}
 	df, _ := NewDataFrameFromMap(data)
@@ -143,7 +143,7 @@ func TestDataFrame_VarEdgeCases(t *testing.T) {
 		t.Error("Var() should error on empty DataFrame")
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []float64{1.0, 2.0, 3.0, 4.0, 5.0},
 	}
 	df, _ := NewDataFrameFromMap(data)
@@ -160,7 +160,7 @@ func TestDataFrame_MedianEdgeCases(t *testing.T) {
 		t.Error("Median() should error on empty DataFrame")
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3, 4, 5},
 	}
 	df, _ := NewDataFrameFromMap(data)
@@ -180,7 +180,7 @@ func TestDataFrame_QuantileEdgeCases(t *testing.T) {
 		t.Error("Quantile() should error on empty DataFrame")
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3, 4, 5},
 	}
 	df, _ := NewDataFrameFromMap(data)
@@ -208,7 +208,7 @@ func TestDataFrame_DescribeEdgeCases(t *testing.T) {
 		t.Error("Describe() should error on empty DataFrame")
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3, 4, 5},
 		"col2": []float64{1.1, 2.2, 3.3, 4.4, 5.5},
 	}
@@ -230,7 +230,7 @@ func TestDataFrame_ValueCountsEdgeCases(t *testing.T) {
 		t.Error("ValueCounts() should error on empty DataFrame")
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []string{"a", "b", "a", "c", "b", "a"},
 	}
 	df, _ := NewDataFrameFromMap(data)
@@ -256,7 +256,7 @@ func TestDataFrame_CorrelationEdgeCases(t *testing.T) {
 		t.Error("Correlation() should error on empty DataFrame")
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"text": []string{"a", "b", "c"},
 	}
 	df, _ := NewDataFrameFromMap(data)
@@ -265,7 +265,7 @@ func TestDataFrame_CorrelationEdgeCases(t *testing.T) {
 		t.Error("Correlation() should error when no numeric columns")
 	}
 
-	data2 := map[string]interface{}{
+	data2 := map[string]any{
 		"col1": []int64{1, 2, 3, 4, 5},
 		"col2": []float64{2.0, 4.0, 6.0, 8.0, 10.0},
 	}
@@ -283,7 +283,7 @@ func TestDataFrame_NumericSummaryEdgeCases(t *testing.T) {
 		t.Error("NumericSummary() should error on empty DataFrame")
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3, 4, 5},
 	}
 	df, _ := NewDataFrameFromMap(data)

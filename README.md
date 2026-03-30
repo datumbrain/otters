@@ -2,7 +2,8 @@
 
 _Smooth, intelligent data processing for Go._
 
-Otters is a high-performance DataFrame library for Go, inspired by Pandas but designed for Go's strengths: type safety, performance, and simplicity.
+Otters is a high-performance DataFrame library for Go, inspired by Pandas but designed for Go's
+strengths: type safety, performance, and simplicity.
 
 [![Go Version](https://img.shields.io/badge/go-1.19+-blue.svg)](https://golang.org)
 [![Go Report Card](https://goreportcard.com/badge/github.com/datumbrain/otters)](https://goreportcard.com/report/github.com/datumbrain/otters)
@@ -180,7 +181,7 @@ df, err := otters.ReadCSVWithOptions("data.csv", otters.CSVOptions{
 })
 
 // From data
-df, err := otters.NewDataFrameFromMap(map[string]interface{}{
+df, err := otters.NewDataFrameFromMap(map[string]any{
     "name":   []string{"Alice", "Bob", "Carol"},
     "age":    []int64{25, 30, 35},
     "salary": []float64{50000, 60000, 70000},

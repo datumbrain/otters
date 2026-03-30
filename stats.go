@@ -33,7 +33,7 @@ func (df *DataFrame) Sum(column string) (float64, error) {
 	}
 
 	sum := 0.0
-	for i := 0; i < series.Length; i++ {
+	for i := range series.Length {
 		value, err := series.Get(i)
 		if err != nil {
 			return 0, wrapColumnError("Sum", column, err)
@@ -69,7 +69,7 @@ func (df *DataFrame) Mean(column string) (float64, error) {
 }
 
 // Min finds the minimum value in a numeric column
-func (df *DataFrame) Min(column string) (interface{}, error) {
+func (df *DataFrame) Min(column string) (any, error) {
 	if df.err != nil {
 		return nil, df.err
 	}
@@ -93,7 +93,7 @@ func (df *DataFrame) Min(column string) (interface{}, error) {
 	}
 
 	min := convertToFloat64(firstValue)
-	for i := 1; i < series.Length; i++ {
+	for i := range series.Length {
 		value, err := series.Get(i)
 		if err != nil {
 			return nil, wrapColumnError("Min", column, err)
@@ -113,7 +113,7 @@ func (df *DataFrame) Min(column string) (interface{}, error) {
 }
 
 // Max finds the maximum value in a numeric column
-func (df *DataFrame) Max(column string) (interface{}, error) {
+func (df *DataFrame) Max(column string) (any, error) {
 	if df.err != nil {
 		return nil, df.err
 	}
@@ -137,7 +137,7 @@ func (df *DataFrame) Max(column string) (interface{}, error) {
 	}
 
 	max := convertToFloat64(firstValue)
-	for i := 1; i < series.Length; i++ {
+	for i := range series.Length {
 		value, err := series.Get(i)
 		if err != nil {
 			return nil, wrapColumnError("Max", column, err)
@@ -183,7 +183,7 @@ func (df *DataFrame) Std(column string) (float64, error) {
 
 	// Calculate variance
 	variance := 0.0
-	for i := 0; i < series.Length; i++ {
+	for i := range series.Length {
 		value, err := series.Get(i)
 		if err != nil {
 			return 0, wrapColumnError("Std", column, err)
@@ -228,7 +228,7 @@ func (df *DataFrame) Median(column string) (float64, error) {
 
 	// Extract and sort values
 	values := make([]float64, series.Length)
-	for i := 0; i < series.Length; i++ {
+	for i := range series.Length {
 		value, err := series.Get(i)
 		if err != nil {
 			return 0, wrapColumnError("Median", column, err)
@@ -272,7 +272,7 @@ func (df *DataFrame) Quantile(column string, q float64) (float64, error) {
 
 	// Extract and sort values
 	values := make([]float64, series.Length)
-	for i := 0; i < series.Length; i++ {
+	for i := range series.Length {
 		value, err := series.Get(i)
 		if err != nil {
 			return 0, wrapColumnError("Quantile", column, err)
@@ -320,7 +320,7 @@ func (df *DataFrame) Describe() (*DataFrame, error) {
 	stats := []string{"count", "mean", "std", "min", "25%", "50%", "75%", "max"}
 
 	// Create result data
-	resultData := make(map[string]interface{})
+	resultData := make(map[string]any)
 	resultData["statistic"] = stats
 
 	// Calculate statistics for each numeric column
@@ -399,14 +399,14 @@ func (df *DataFrame) ValueCounts(column string) (*DataFrame, error) {
 	counts := make(map[string]int)
 
 	// Count occurrences
-	for i := 0; i < series.Length; i++ {
+	for i := range series.Length {
 		value, err := series.Get(i)
 		if err != nil {
 			return nil, wrapColumnError("ValueCounts", column, err)
 		}
 
 		key := fmt.Sprintf("%v", value)
-		counts[key]++
+		counts[key] += 1
 	}
 
 	// Create result DataFrame
@@ -433,7 +433,7 @@ func (df *DataFrame) ValueCounts(column string) (*DataFrame, error) {
 		frequencies = append(frequencies, int64(pair.count))
 	}
 
-	resultData := map[string]interface{}{
+	resultData := map[string]any{
 		column:  values,
 		"count": frequencies,
 	}
@@ -462,7 +462,7 @@ func (df *DataFrame) Correlation() (*DataFrame, error) {
 
 	// Calculate correlation matrix
 	n := len(numericColumns)
-	resultData := make(map[string]interface{})
+	resultData := make(map[string]any)
 	resultData["column"] = numericColumns
 
 	for _, col1 := range numericColumns {
@@ -485,7 +485,7 @@ func (df *DataFrame) Correlation() (*DataFrame, error) {
 // Helper functions
 
 // convertToFloat64 converts numeric values to float64
-func convertToFloat64(value interface{}) float64 {
+func convertToFloat64(value any) float64 {
 	switch v := value.(type) {
 	case int64:
 		return float64(v)
@@ -525,7 +525,7 @@ func (df *DataFrame) calculateCorrelation(col1, col2 string) (float64, error) {
 	// Calculate correlation
 	var numerator, sumSq1, sumSq2 float64
 
-	for i := 0; i < series1.Length; i++ {
+	for i := range series1.Length {
 		val1, err := series1.Get(i)
 		if err != nil {
 			return 0, err
