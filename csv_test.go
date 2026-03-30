@@ -99,7 +99,7 @@ Bob,30`
 }
 
 func TestWriteCSVEdgeCases(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3},
 		"col2": []string{"a", "b", "c"},
 	}
@@ -398,7 +398,7 @@ func TestCSV_WriteCSV_PropagatesDataFrameError(t *testing.T) {
 }
 
 func TestCSV_WriteCSVWithOptions_WritesFile(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3},
 		"col2": []float64{1.1, 2.2, 3.3},
 		"col3": []bool{true, false, true},
@@ -420,7 +420,7 @@ func TestCSV_WriteCSVWithOptions_WritesFile(t *testing.T) {
 
 func TestCSV_WriteCSV_TimeColumn_WritesFile(t *testing.T) {
 	tm := time.Date(2023, 1, 1, 12, 30, 0, 0, time.UTC)
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []time.Time{tm, tm},
 	}
 	df, _ := NewDataFrameFromMap(data)

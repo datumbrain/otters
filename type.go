@@ -38,14 +38,14 @@ func (ct ColumnType) String() string {
 
 // Series represents a single column of data with a specific type
 type Series struct {
-	Name   string      // Column name
-	Type   ColumnType  // Data type
-	Data   interface{} // Actual data: []string, []int64, []float64, []bool, []time.Time
-	Length int         // Number of elements
+	Name   string     // Column name
+	Type   ColumnType // Data type
+	Data   any        // Actual data: []string, []int64, []float64, []bool, []time.Time
+	Length int        // Number of elements
 }
 
 // NewSeries creates a new Series with the given name and data
-func NewSeries(name string, data interface{}) (*Series, error) {
+func NewSeries(name string, data any) (*Series, error) {
 	s := &Series{
 		Name: name,
 		Data: data,
@@ -79,7 +79,7 @@ func NewSeries(name string, data interface{}) (*Series, error) {
 }
 
 // Get returns the value at the specified index
-func (s *Series) Get(index int) (interface{}, error) {
+func (s *Series) Get(index int) (any, error) {
 	if index < 0 || index >= s.Length {
 		return nil, &OtterError{
 			Op:      "Series.Get",
@@ -112,12 +112,16 @@ func (s *Series) Get(index int) (interface{}, error) {
 // Returns 0 and error if index is out of range or type mismatch.
 func (s *Series) GetInt64(index int) (int64, error) {
 	if index < 0 || index >= s.Length {
-		return 0, &OtterError{Op: "Series.GetInt64", Column: s.Name,
-			Message: fmt.Sprintf("index %d out of range [0:%d]", index, s.Length)}
+		return 0, &OtterError{
+			Op: "Series.GetInt64", Column: s.Name,
+			Message: fmt.Sprintf("index %d out of range [0:%d]", index, s.Length),
+		}
 	}
 	if s.Type != Int64Type {
-		return 0, &OtterError{Op: "Series.GetInt64", Column: s.Name,
-			Message: fmt.Sprintf("type mismatch: expected int64, got %s", s.Type)}
+		return 0, &OtterError{
+			Op: "Series.GetInt64", Column: s.Name,
+			Message: fmt.Sprintf("type mismatch: expected int64, got %s", s.Type),
+		}
 	}
 	return s.Data.([]int64)[index], nil
 }
@@ -125,12 +129,16 @@ func (s *Series) GetInt64(index int) (int64, error) {
 // GetFloat64 returns the float64 value at the specified index without boxing.
 func (s *Series) GetFloat64(index int) (float64, error) {
 	if index < 0 || index >= s.Length {
-		return 0, &OtterError{Op: "Series.GetFloat64", Column: s.Name,
-			Message: fmt.Sprintf("index %d out of range [0:%d]", index, s.Length)}
+		return 0, &OtterError{
+			Op: "Series.GetFloat64", Column: s.Name,
+			Message: fmt.Sprintf("index %d out of range [0:%d]", index, s.Length),
+		}
 	}
 	if s.Type != Float64Type {
-		return 0, &OtterError{Op: "Series.GetFloat64", Column: s.Name,
-			Message: fmt.Sprintf("type mismatch: expected float64, got %s", s.Type)}
+		return 0, &OtterError{
+			Op: "Series.GetFloat64", Column: s.Name,
+			Message: fmt.Sprintf("type mismatch: expected float64, got %s", s.Type),
+		}
 	}
 	return s.Data.([]float64)[index], nil
 }
@@ -138,12 +146,16 @@ func (s *Series) GetFloat64(index int) (float64, error) {
 // GetString returns the string value at the specified index without boxing.
 func (s *Series) GetString(index int) (string, error) {
 	if index < 0 || index >= s.Length {
-		return "", &OtterError{Op: "Series.GetString", Column: s.Name,
-			Message: fmt.Sprintf("index %d out of range [0:%d]", index, s.Length)}
+		return "", &OtterError{
+			Op: "Series.GetString", Column: s.Name,
+			Message: fmt.Sprintf("index %d out of range [0:%d]", index, s.Length),
+		}
 	}
 	if s.Type != StringType {
-		return "", &OtterError{Op: "Series.GetString", Column: s.Name,
-			Message: fmt.Sprintf("type mismatch: expected string, got %s", s.Type)}
+		return "", &OtterError{
+			Op: "Series.GetString", Column: s.Name,
+			Message: fmt.Sprintf("type mismatch: expected string, got %s", s.Type),
+		}
 	}
 	return s.Data.([]string)[index], nil
 }
@@ -174,7 +186,7 @@ func (s *Series) StringSlice() []string {
 }
 
 // Set updates the value at the specified index
-func (s *Series) Set(index int, value interface{}) error {
+func (s *Series) Set(index int, value any) error {
 	if index < 0 || index >= s.Length {
 		return &OtterError{
 			Op:      "Series.Set",
@@ -378,7 +390,7 @@ func isTimeValue(value string) bool {
 }
 
 // ConvertValue converts a string value to the specified type
-func ConvertValue(value string, targetType ColumnType) (interface{}, error) {
+func ConvertValue(value string, targetType ColumnType) (any, error) {
 	value = strings.TrimSpace(value)
 
 	if value == "" {
@@ -404,7 +416,7 @@ func ConvertValue(value string, targetType ColumnType) (interface{}, error) {
 	}
 }
 
-func getZeroValue(targetType ColumnType) interface{} {
+func getZeroValue(targetType ColumnType) any {
 	switch targetType {
 	case StringType:
 		return ""

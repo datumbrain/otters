@@ -20,7 +20,7 @@ All notable changes to this project will be documented in this file.
   result := df.Filter("bad_column", "==", 1)
   ```
 
-- **`Head` and `Tail` panic on time columns** — The internal `slice()` function had no `TimeType` case, causing it to fall through to the error path on any DataFrame that contained a time column. Added the missing `case TimeType:` branch, consistent with the pattern already used in `selectRows()`.
+- **`Head` and `Tail` panic on time columns** — The internal `slice()` function had no `TimeType` case, causing it to fall through to the error path on any DataFrame that contained a time column. Added the missing `case TimeType:` branch, consistent with the pattern already used in `SelectRows()`.
 
 - **GroupBy key collisions on pipe characters** — Group keys were built by joining column values with `"|"`, meaning a value containing that character (e.g. `"a|b"`) would be indistinguishable from two separate values (`"a"` and `"b"`) in a multi-column group. Keys are now length-prefixed (`"3:foo"`) and separated by a null byte, making them unambiguous for all string content. The original values are stored directly on the group struct so no parsing of the key is needed when building the result.
 

@@ -6,7 +6,7 @@ import (
 )
 
 func TestSelectEdgeCases(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3},
 		"col2": []string{"a", "b", "c"},
 		"col3": []float64{1.1, 2.2, 3.3},
@@ -25,7 +25,7 @@ func TestSelectEdgeCases(t *testing.T) {
 }
 
 func TestDropEdgeCases(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3},
 		"col2": []string{"a", "b", "c"},
 	}
@@ -43,7 +43,7 @@ func TestDropEdgeCases(t *testing.T) {
 }
 
 func TestSortByEdgeCases(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{3, 1, 2},
 		"col2": []string{"c", "a", "b"},
 	}
@@ -67,7 +67,7 @@ func TestSortByEdgeCases(t *testing.T) {
 }
 
 func TestUniqueEdgeCases(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 1, 3, 2},
 	}
 	df, _ := NewDataFrameFromMap(data)
@@ -82,7 +82,7 @@ func TestUniqueEdgeCases(t *testing.T) {
 }
 
 func TestQueryEdgeCases(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"age": []int64{25, 30, 35, 40},
 	}
 	df, _ := NewDataFrameFromMap(data)
@@ -224,7 +224,7 @@ func TestFilterIndicesTypedEdgeCases(t *testing.T) {
 }
 
 func TestGroupBy_MeanCount(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"category": []string{"A", "B", "A", "B"},
 		"value":    []int64{10, 20, 30, 40},
 	}
@@ -415,7 +415,7 @@ func TestMatchTime(t *testing.T) {
 func TestEmptySliceForType(t *testing.T) {
 	tests := []struct {
 		ct   ColumnType
-		want interface{}
+		want any
 	}{
 		{StringType, []string{}},
 		{Int64Type, []int64{}},

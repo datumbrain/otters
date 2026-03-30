@@ -115,7 +115,7 @@ func TestSeries_StringSlice(t *testing.T) {
 func TestGetZeroValue(t *testing.T) {
 	tests := []struct {
 		ct   ColumnType
-		want interface{}
+		want any
 	}{
 		{StringType, ""},
 		{Int64Type, int64(0)},

@@ -8,7 +8,7 @@ import (
 )
 
 func TestDataFrame_Len(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3},
 	}
 	df, _ := NewDataFrameFromMap(data)
@@ -24,7 +24,7 @@ func TestDataFrame_Len(t *testing.T) {
 }
 
 func TestDataFrame_Width(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3},
 		"col2": []string{"a", "b", "c"},
 	}
@@ -41,7 +41,7 @@ func TestDataFrame_Width(t *testing.T) {
 }
 
 func TestDataFrame_String(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"name": []string{"Alice", "Bob"},
 		"age":  []int64{25, 30},
 	}
@@ -57,7 +57,7 @@ func TestDataFrame_String(t *testing.T) {
 }
 
 func TestDataFrame_Info(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"name":   []string{"Alice", "Bob", "Carol"},
 		"age":    []int64{25, 30, 35},
 		"salary": []float64{50000, 60000, 70000},
@@ -74,7 +74,7 @@ func TestDataFrame_Info(t *testing.T) {
 }
 
 func TestDataFrame_Reset(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3},
 	}
 	df, _ := NewDataFrameFromMap(data)
@@ -87,7 +87,7 @@ func TestDataFrame_Reset(t *testing.T) {
 }
 
 func TestDataFrame_GetEdgeCases(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3},
 	}
 	df, _ := NewDataFrameFromMap(data)
@@ -109,7 +109,7 @@ func TestDataFrame_GetEdgeCases(t *testing.T) {
 }
 
 func TestDataFrame_SetEdgeCases(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3},
 	}
 	df, _ := NewDataFrameFromMap(data)
@@ -136,7 +136,7 @@ func TestDataFrame_SetEdgeCases(t *testing.T) {
 }
 
 func TestDataFrame_HeadEdgeCases(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3},
 	}
 	df, _ := NewDataFrameFromMap(data)
@@ -153,7 +153,7 @@ func TestDataFrame_HeadEdgeCases(t *testing.T) {
 }
 
 func TestDataFrame_TailEdgeCases(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3, 4, 5},
 	}
 	df, _ := NewDataFrameFromMap(data)
@@ -179,7 +179,7 @@ func TestDataFrame_TailEdgeCases(t *testing.T) {
 }
 
 func TestDataFrame_GetSeriesEdgeCases(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3},
 	}
 	df, _ := NewDataFrameFromMap(data)
@@ -196,7 +196,7 @@ func TestDataFrame_GetSeriesEdgeCases(t *testing.T) {
 }
 
 func TestDataFrame_AddColumnEdgeCases(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3},
 		"col2": []string{"a", "b", "c"},
 	}
@@ -216,7 +216,7 @@ func TestDataFrame_AddColumnEdgeCases(t *testing.T) {
 }
 
 func TestDataFrame_DropColumnEdgeCases(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3},
 		"col2": []string{"a", "b", "c"},
 	}
@@ -237,7 +237,7 @@ func TestDataFrame_DropColumnEdgeCases(t *testing.T) {
 }
 
 func TestDataFrame_RenameColumnEdgeCases(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3},
 		"col2": []string{"a", "b", "c"},
 	}
@@ -263,7 +263,7 @@ func TestDataFrame_RenameColumnEdgeCases(t *testing.T) {
 }
 
 func TestDataFrame_GetColumnTypeEdgeCases(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3},
 	}
 	df, _ := NewDataFrameFromMap(data)
@@ -280,7 +280,7 @@ func TestDataFrame_GetColumnTypeEdgeCases(t *testing.T) {
 }
 
 func TestDataFrame_HasColumnEdgeCases(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3},
 	}
 	df, _ := NewDataFrameFromMap(data)
@@ -295,7 +295,7 @@ func TestDataFrame_HasColumnEdgeCases(t *testing.T) {
 }
 
 func TestDataFrame_CopyEdgeCases(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3},
 	}
 	df, _ := NewDataFrameFromMap(data)
@@ -331,7 +331,7 @@ func TestDF_Slice_AllTypes(t *testing.T) {
 	t1 := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 	t2 := time.Date(2023, 1, 2, 0, 0, 0, 0, time.UTC)
 	t3 := time.Date(2023, 1, 3, 0, 0, 0, 0, time.UTC)
-	data := map[string]interface{}{
+	data := map[string]any{
 		"s": []string{"a", "b", "c", "d"},
 		"i": []int64{1, 2, 3, 4},
 		"f": []float64{1.1, 2.2, 3.3, 4.4},
@@ -352,7 +352,7 @@ func TestDF_Slice_AllTypes(t *testing.T) {
 }
 
 func TestDF_Slice_InvalidRanges(t *testing.T) {
-	data := map[string]interface{}{"i": []int64{1, 2, 3}}
+	data := map[string]any{"i": []int64{1, 2, 3}}
 	df, _ := NewDataFrameFromMap(data)
 	if df.slice(-1, 1, "Slice").Error() == nil {
 		t.Error("expected error for negative start")
@@ -388,7 +388,7 @@ func TestDF_Copy_ErrorBranch(t *testing.T) {
 }
 
 func TestDF_Copy_DeepCopy(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3},
 		"col2": []string{"a", "b", "c"},
 		"col3": []float64{1.1, 2.2, 3.3},
@@ -406,7 +406,7 @@ func TestDF_Copy_DeepCopy(t *testing.T) {
 }
 
 func TestDF_String_SmallAndLarge(t *testing.T) {
-	df1, _ := NewDataFrameFromMap(map[string]interface{}{"col1": []int64{1, 2}})
+	df1, _ := NewDataFrameFromMap(map[string]any{"col1": []int64{1, 2}})
 	if df1.String() == "" {
 		t.Error("String() should return representation")
 	}
@@ -414,14 +414,14 @@ func TestDF_String_SmallAndLarge(t *testing.T) {
 	for i := range largeData {
 		largeData[i] = int64(i)
 	}
-	df2, _ := NewDataFrameFromMap(map[string]interface{}{"col1": largeData})
+	df2, _ := NewDataFrameFromMap(map[string]any{"col1": largeData})
 	if df2.String() == "" {
 		t.Error("String() should return representation for large DataFrame")
 	}
 }
 
 func TestDF_AddColumn_AllBranches(t *testing.T) {
-	data := map[string]interface{}{"existing": []int64{1, 2, 3}}
+	data := map[string]any{"existing": []int64{1, 2, 3}}
 	df, _ := NewDataFrameFromMap(data)
 
 	s1, _ := NewSeries("new", []int64{4, 5, 6})
@@ -466,17 +466,17 @@ func TestDF_NewDataFrameFromSeries_AllBranches(t *testing.T) {
 }
 
 func TestDF_NewDataFrameFromMap_AllBranches(t *testing.T) {
-	df1, err1 := NewDataFrameFromMap(map[string]interface{}{})
+	df1, err1 := NewDataFrameFromMap(map[string]any{})
 	if err1 != nil || df1 == nil {
 		t.Error("NewDataFrameFromMap with empty map should succeed")
 	}
 
-	df2, err2 := NewDataFrameFromMap(map[string]interface{}{"col1": []int64{1, 2, 3}})
+	df2, err2 := NewDataFrameFromMap(map[string]any{"col1": []int64{1, 2, 3}})
 	if err2 != nil || df2.Width() != 1 {
 		t.Error("NewDataFrameFromMap with single column should succeed")
 	}
 
-	df3, err3 := NewDataFrameFromMap(map[string]interface{}{
+	df3, err3 := NewDataFrameFromMap(map[string]any{
 		"col1": []int64{1, 2, 3},
 		"col2": []string{"a", "b", "c"},
 	})
@@ -484,7 +484,7 @@ func TestDF_NewDataFrameFromMap_AllBranches(t *testing.T) {
 		t.Error("NewDataFrameFromMap with multiple columns should succeed")
 	}
 
-	df4, err4 := NewDataFrameFromMap(map[string]interface{}{
+	df4, err4 := NewDataFrameFromMap(map[string]any{
 		"col1": []int64{1, 2, 3},
 		"col2": []string{"a", "b"},
 	})
@@ -494,7 +494,7 @@ func TestDF_NewDataFrameFromMap_AllBranches(t *testing.T) {
 }
 
 func TestDF_HasColumn_GetColumnType_AllBranches(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"str":   []string{"a", "b"},
 		"int":   []int64{1, 2},
 		"float": []float64{1.1, 2.2},
@@ -531,7 +531,7 @@ func TestDF_HasColumn_GetColumnType_ErrorBranch(t *testing.T) {
 }
 
 func TestDF_Tail_EdgeCases(t *testing.T) {
-	data := map[string]interface{}{"col1": []int64{1, 2, 3, 4, 5}}
+	data := map[string]any{"col1": []int64{1, 2, 3, 4, 5}}
 	df, _ := NewDataFrameFromMap(data)
 	if df.Tail(0).Len() != 0 {
 		t.Error("Tail(0) should return 0 rows")
@@ -548,7 +548,7 @@ func TestDF_Tail_EdgeCases(t *testing.T) {
 }
 
 func TestDF_Get_Set_EdgeCases(t *testing.T) {
-	data := map[string]interface{}{"col1": []int64{1, 2, 3}}
+	data := map[string]any{"col1": []int64{1, 2, 3}}
 	df, _ := NewDataFrameFromMap(data)
 
 	val, err := df.Get(0, "col1")
@@ -573,7 +573,7 @@ func TestDF_Get_Set_EdgeCases(t *testing.T) {
 }
 
 func TestDF_GetSeries_EdgeCases(t *testing.T) {
-	data := map[string]interface{}{"col1": []int64{1, 2, 3}}
+	data := map[string]any{"col1": []int64{1, 2, 3}}
 	df, _ := NewDataFrameFromMap(data)
 	if s, err := df.GetSeries("col1"); err != nil || s == nil {
 		t.Error("GetSeries should succeed")
@@ -607,7 +607,7 @@ func TestDF_Count_ResetIndex_ErrorBranch(t *testing.T) {
 }
 
 func TestDF_Count_ResetIndex_SuccessBranch(t *testing.T) {
-	df, _ := NewDataFrameFromMap(map[string]interface{}{"col1": []int64{1, 2, 3, 4}})
+	df, _ := NewDataFrameFromMap(map[string]any{"col1": []int64{1, 2, 3, 4}})
 	if df.Count() != 4 {
 		t.Fatalf("expected count 4, got %d", df.Count())
 	}
@@ -618,7 +618,7 @@ func TestDF_Count_ResetIndex_SuccessBranch(t *testing.T) {
 }
 
 func TestDF_ValidationFunctions(t *testing.T) {
-	data := map[string]interface{}{"col1": []int64{1, 2, 3}, "col2": []string{"a", "b", "c"}}
+	data := map[string]any{"col1": []int64{1, 2, 3}, "col2": []string{"a", "b", "c"}}
 	df, _ := NewDataFrameFromMap(data)
 
 	if err := df.validateColumnExists("col1"); err != nil {
@@ -675,7 +675,7 @@ func TestDF_AddColumnWithEmptyDF(t *testing.T) {
 }
 
 func TestDF_DropColumnLastColumn(t *testing.T) {
-	data := map[string]interface{}{"col1": []int64{1, 2, 3}}
+	data := map[string]any{"col1": []int64{1, 2, 3}}
 	df, _ := NewDataFrameFromMap(data)
 	result := df.DropColumn("col1")
 	if result.Error() != nil || result.Width() != 0 {
@@ -684,7 +684,7 @@ func TestDF_DropColumnLastColumn(t *testing.T) {
 }
 
 func TestDF_RenameColumnSuccess(t *testing.T) {
-	data := map[string]interface{}{"old": []int64{1, 2, 3}}
+	data := map[string]any{"old": []int64{1, 2, 3}}
 	df, _ := NewDataFrameFromMap(data)
 	result := df.RenameColumn("old", "new")
 	if result.Error() != nil || !result.HasColumn("new") || result.HasColumn("old") {
