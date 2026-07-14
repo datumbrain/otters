@@ -4,6 +4,65 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [1.0.6] — 2026-07-15
+
+### Added
+
+- **Lazy views (`LazyFrame`)** — `df.Lazy().Filter(...).Select(...).Sort(...).Collect()` defers materialization: the chain only manipulates a row-index/column view over the source DataFrame, and data is copied once, at `Collect()`. Supports `Filter`, `Where`, `Select`, `Sort`, `SortBy`, `Head`, `Tail`. On a 10k-row Filter→Select→Sort chain this halves memory versus the eager equivalent (664 KB / 45 allocs → **319 KB / 24 allocs**).
+
+- **`errors.Is` support for sentinel errors** — Errors produced by the library now match the exported sentinels: a missing column matches `ErrColumnNotFound`, an invalid row index matches `ErrIndexOutOfRange`, and operations on empty DataFrames match `ErrEmptyDataFrame`. Previously the sentinels existed but never matched any real error.
+
+### Fixed
+
+- **Filter truncated fractional comparison values on int columns** — `Filter("n", "==", 2.5)` matched rows where `n == 2`, and `">=" 2.5` wrongly included 2. Fractional float values are now compared in float64 space instead of being truncated to int64.
+
+- **CSV round-trip rewrote 0/1 columns as true/false** — Type inference used `strconv.ParseBool`, which accepts `"0"`, `"1"`, `"t"`, and `"f"`, so numeric flag columns were loaded as booleans and written back as `true`/`false`. Only explicit `true`/`false` spellings are treated as boolean now.
+
+- **All-empty columns inferred as bool** — A column containing only empty strings carried no type information but was inferred as `BoolType` (converting everything to `false`). It now defaults to `StringType`.
+
+- **`GroupBy.Count()` dropped the count entirely on non-numeric frames** — Count was only emitted per numeric non-group column, so grouping an all-string DataFrame returned just the group columns. Count is now a dedicated `count` column holding each group's row size, independent of other columns.
+
+- **GroupBy results ordered by internal key encoding** — Groups were sorted by their length-prefixed internal key, so `"Phone"` sorted before `"Laptop"` (shorter prefix first). Groups are now ordered by their actual column values.
+
+- **DataFrames aliased caller slices** — `NewSeries` (and everything built on it, like `NewDataFrameFromMap`) stored the caller's slice directly, so mutating the source slice afterwards silently mutated the DataFrame. Input data is now copied on construction; internal operations use an ownership-transferring constructor to avoid double copies.
+
+- **Column-name collisions silently dropped result data** — `ValueCounts` on a column named `count`, `Describe` on a frame with a numeric column named `statistic`, and `Correlation` with a column named `column` all collided with their own result columns and lost data. All three now de-collide.
+
+- **Stats result column order was alphabetical** — `Describe`, `Correlation`, and `ValueCounts` built results through map iteration, so the label column could land mid-table. The label column now always leads, followed by data columns in DataFrame order.
+
+- **`Select` with a duplicated column corrupted internal state** — `Select("a", "a")` produced a frame whose column order and column map disagreed. Duplicates are rejected with an error.
+
+- **Sort was unstable** — Rows with equal sort keys could be reordered arbitrarily between runs. Ties now break on the original row index, producing stable-sort output while keeping the faster unstable algorithm.
+
+- **`Query` failed on quoted values containing spaces** — `df.Query("name == 'John Smith'")` was rejected as malformed; the value portion is now everything after the operator.
+
+- **`ValueCounts` tie order was non-deterministic** — Values with equal frequency now sort by value.
+
+### Performance
+
+Benchmarks on 10,000-row DataFrame (Apple M2 Pro):
+
+| Operation | Before | After | Improvement |
+|---|---:|---:|---|
+| Sort | 392 µs / 20,039 allocs | 104 µs / **19 allocs** | **3.8× faster, 99.9% fewer allocs** |
+| Chained Filter→Select→Sort | 664 KB / 45 allocs | 319 KB / 24 allocs (lazy) | **−52% memory, −47% allocs** |
+
+- **Sort: typed comparator path** (`ops.go`) — `SortBy` builds one typed comparator per sort column instead of boxing every value through `Series.Get` inside the comparison loop.
+
+### Internal
+
+- Removed dead helpers (`newCellError`, `isColumnNotFound`, `isIndexOutOfRange`, `isTypeMismatch`, `clearError`, `hasError`, `DataFrame.reset`) and the tests that existed only to cover them.
+- Migrated `interface{}` → `any` across all source and test files.
+- Resurrected the five `Demo*` functions in `example_test.go` as real `Example_*` functions with regenerated, verified `// Output:` blocks — they had been renamed away from the example convention and their stale output blocks contained wrong values (std dev, quantiles, top region). All six examples now run as part of the test suite.
+
+### Tests added
+
+- Regression tests for every fix above, consolidated into the per-file suites (`ops_test.go`, `type_test.go`, `csv_test.go`, `df_test.go`, `stats_test.go`).
+- `lazy_test.go` — eager/lazy equivalence, Head/Tail parity, chained-sort stability, empty-result schema, error propagation, fractional-float parity, time columns, collect independence, and an eager-vs-lazy benchmark.
+- Suite: 186 tests passing with `-race`; `go vet` and `gofmt` clean.
+
+---
+
 ## [Unreleased] — 2026-02-17
 
 ### Fixed
