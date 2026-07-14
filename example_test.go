@@ -39,8 +39,8 @@ func Example_basicDataFrame() {
 	// First person: Alice, age 25
 }
 
-// DemoFiltering demonstrates filtering and selection operations
-func DemoFiltering() {
+// Example_filtering demonstrates filtering and selection operations
+func Example_filtering() {
 	// Sample employee data
 	csvData := `name,department,salary,experience
 Alice,Engineering,75000,3
@@ -82,15 +82,14 @@ Frank,Sales,55000,1`
 	// Bob	80000	5
 	// Alice	75000	3
 	// David	70000	4
-	//
 	// === Department Averages (experienced employees) ===
 	// department	salary	experience
 	// Engineering	75000	4
 	// Marketing	65000	3
 }
 
-// DemoStatistics demonstrates statistical analysis
-func DemoStatistics() {
+// Example_statistics demonstrates statistical analysis
+func Example_statistics() {
 	// Sales data
 	data := map[string]any{
 		"region":  []string{"North", "South", "East", "West", "North", "South"},
@@ -135,29 +134,29 @@ func DemoStatistics() {
 	// Total Sales: $695000
 	// Average: $115833
 	// Range: $95000 - $130000
-	// Std Dev: $12472
+	// Std Dev: $12416
 	//
 	// === Detailed Summary ===
-	// statistic	sales	quarter
+	// statistic	quarter	sales
 	// count	6	6
-	// mean	115833.333333	1.333333
-	// std	12472.191289	0.516398
-	// min	95000.000000	1.000000
-	// 25%	112500.000000	1.000000
-	// 50%	117500.000000	1.000000
-	// 75%	123750.000000	2.000000
-	// max	130000.000000	2.000000
+	// mean	1.333333	115833.333333
+	// std	0.516398	12416.387021
+	// min	1.000000	95000.000000
+	// 25%	1.000000	111250.000000
+	// 50%	1.000000	117500.000000
+	// 75%	1.750000	123750.000000
+	// max	2.000000	130000.000000
 	//
 	// === Regional Analysis ===
-	// region	sales	quarter
-	// East	95000	1
-	// North	245000	3
-	// South	225000	2
-	// West	130000	1
+	// region	quarter	sales
+	// East	1	95000
+	// North	3	245000
+	// South	3	225000
+	// West	1	130000
 }
 
-// DemoCSVOperations demonstrates CSV file operations
-func DemoCSVOperations() {
+// Example_csvOperations demonstrates CSV file operations
+func Example_csvOperations() {
 	// Create sample CSV file
 	csvContent := `product,category,price,units_sold,date
 Laptop,Electronics,999.99,50,2024-01-15
@@ -219,7 +218,7 @@ Keyboard,Electronics,79.99,75,2024-01-17`
 	//     category: string
 	//     price: float64
 	//     units_sold: int64
-	//     date: string
+	//     date: time
 	//
 	// === Revenue Analysis ===
 	// Electronics products:
@@ -231,8 +230,8 @@ Keyboard,Electronics,79.99,75,2024-01-17`
 	// Saved electronics data to electronics.csv
 }
 
-// DemoWorkflow demonstrates complex data analysis workflow
-func DemoWorkflow() {
+// Example_workflow demonstrates complex data analysis workflow
+func Example_workflow() {
 	// Complex sales dataset
 	salesData := `salesperson,region,product,sales_amount,commission_rate,sale_date
 Alice,North,Laptop,1200,0.05,2024-01-15
@@ -293,21 +292,21 @@ Eve,North,Phone,720,0.03,2024-01-19`
 	// === Regional Performance ===
 	// region	sales_amount	commission_rate
 	// East	950	0.045
-	// North	890	0.036667
+	// North	890	0.03666666666666667
 	// South	675	0.035
 	// West	1100	0.05
 	//
 	// === High-Value Sales (>$1000) ===
 	// salesperson	product	sales_amount	sale_date
-	// Carol	Laptop	1300	2024-01-18
-	// Alice	Laptop	1200	2024-01-15
-	// David	Laptop	1100	2024-01-17
+	// Carol	Laptop	1300	2024-01-18 00:00:00 +0000 UTC
+	// Alice	Laptop	1200	2024-01-15 00:00:00 +0000 UTC
+	// David	Laptop	1100	2024-01-17 00:00:00 +0000 UTC
 	//
 	// === Product Performance ===
-	// product	sales_amount	commission_rate
-	// Laptop	3600	0.15
-	// Phone	2270	0.09
-	// Tablet	1150	0.08
+	// product	count
+	// Laptop	3
+	// Phone	3
+	// Tablet	2
 }
 
 // Test basic DataFrame creation and operations
@@ -561,12 +560,9 @@ func BenchmarkDataFrameOperations(b *testing.B) {
 }
 
 // DemoRealWorldUsage demonstrates real-world usage
-func DemoRealWorldUsage() {
+func Example_realWorldUsage() {
 	fmt.Println("🦦 Welcome to Otters - Smooth Data Processing for Go!")
 	fmt.Println("================================================")
-
-	// Simulate loading real data
-	start := time.Now()
 
 	salesData := `date,product,category,revenue,units,region
 2024-01-01,Widget A,Electronics,1250.00,25,North
@@ -581,8 +577,7 @@ func DemoRealWorldUsage() {
 		log.Fatal(err)
 	}
 
-	loadTime := time.Since(start)
-	fmt.Printf("✅ Loaded %d records in %v\n", df.Count(), loadTime)
+	fmt.Printf("✅ Loaded %d records\n", df.Count())
 
 	// Quick analysis
 	totalRevenue, _ := df.Sum("revenue")
@@ -604,12 +599,12 @@ func DemoRealWorldUsage() {
 	// Output:
 	// 🦦 Welcome to Otters - Smooth Data Processing for Go!
 	// ================================================
-	// ✅ Loaded 6 records in 123.456µs
-	// 💰 Total Revenue: $8136.40
-	// 📊 Average: $1356.07
+	// ✅ Loaded 6 records
+	// 💰 Total Revenue: $8137.40
+	// 📊 Average: $1356.23
 	// 🏆 Top Region:
 	// region	revenue	units
-	// North	2625	52
+	// South	2661.4	37
 	//
 	// 🦦 Otters makes data analysis smooth and efficient!
 }

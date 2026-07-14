@@ -870,12 +870,24 @@ func (gb *GroupBy) aggregate(operation string) (*DataFrame, error) {
 	return buildResultDataFrame(gb.columns, groupColData, numericCols)
 }
 
+// sortGroupKeys orders groups by their actual column values, not by the
+// internal length-prefixed key encoding (which would sort "East" before
+// "North" but also "Phone" before "Laptop", by key length first).
 func sortGroupKeys(groups map[string]*groupKey) []string {
 	sortedKeys := make([]string, 0, len(groups))
 	for k := range groups {
 		sortedKeys = append(sortedKeys, k)
 	}
-	sort.Strings(sortedKeys)
+	sort.Slice(sortedKeys, func(i, j int) bool {
+		a := groups[sortedKeys[i]].values
+		b := groups[sortedKeys[j]].values
+		for x := range a {
+			if a[x] != b[x] {
+				return a[x] < b[x]
+			}
+		}
+		return false
+	})
 	return sortedKeys
 }
 

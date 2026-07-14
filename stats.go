@@ -319,13 +319,19 @@ func (df *DataFrame) Describe() (*DataFrame, error) {
 	// Statistics to calculate
 	stats := []string{"count", "mean", "std", "min", "25%", "50%", "75%", "max"}
 
-	// Create result data; avoid colliding with a data column named "statistic"
+	// The label column leads the result; avoid colliding with a data column
+	// named "statistic"
 	labelColumn := "statistic"
 	for contains(numericColumns, labelColumn) {
 		labelColumn += "_"
 	}
-	resultData := make(map[string]any)
-	resultData[labelColumn] = stats
+
+	labelSeries, err := newSeriesOwned(labelColumn, stats)
+	if err != nil {
+		return nil, wrapError("Describe", err)
+	}
+	resultSeries := make([]*Series, 0, len(numericColumns)+1)
+	resultSeries = append(resultSeries, labelSeries)
 
 	// Calculate statistics for each numeric column
 	for _, colName := range numericColumns {
@@ -383,10 +389,14 @@ func (df *DataFrame) Describe() (*DataFrame, error) {
 			values[7] = "NaN"
 		}
 
-		resultData[colName] = values
+		colSeries, err := newSeriesOwned(colName, values)
+		if err != nil {
+			return nil, wrapColumnError("Describe", colName, err)
+		}
+		resultSeries = append(resultSeries, colSeries)
 	}
 
-	return NewDataFrameFromMap(resultData)
+	return NewDataFrameFromSeries(resultSeries...)
 }
 
 // ValueCounts returns the frequency of each unique value in a column
@@ -441,18 +451,23 @@ func (df *DataFrame) ValueCounts(column string) (*DataFrame, error) {
 		frequencies = append(frequencies, int64(pair.count))
 	}
 
-	// Avoid colliding with a data column literally named "count"
+	// Value column leads, count column follows; avoid colliding with a data
+	// column literally named "count"
 	countColumn := "count"
 	if column == countColumn {
 		countColumn = "count_"
 	}
 
-	resultData := map[string]any{
-		column:      values,
-		countColumn: frequencies,
+	valueSeries, err := newSeriesOwned(column, values)
+	if err != nil {
+		return nil, wrapColumnError("ValueCounts", column, err)
+	}
+	countSeries, err := newSeriesOwned(countColumn, frequencies)
+	if err != nil {
+		return nil, wrapColumnError("ValueCounts", column, err)
 	}
 
-	return NewDataFrameFromMap(resultData)
+	return NewDataFrameFromSeries(valueSeries, countSeries)
 }
 
 // Correlation calculates correlation matrix for numeric columns
@@ -474,14 +489,22 @@ func (df *DataFrame) Correlation() (*DataFrame, error) {
 		return nil, newOpError("Correlation", "need at least 2 numeric columns for correlation")
 	}
 
-	// Calculate correlation matrix; avoid colliding with a column named "column"
+	// The label column leads the result, matrix columns follow in DataFrame
+	// order; avoid colliding with a column named "column"
 	labelColumn := "column"
 	for contains(numericColumns, labelColumn) {
 		labelColumn += "_"
 	}
 	n := len(numericColumns)
-	resultData := make(map[string]any)
-	resultData[labelColumn] = numericColumns
+
+	labels := make([]string, n)
+	copy(labels, numericColumns)
+	labelSeries, err := newSeriesOwned(labelColumn, labels)
+	if err != nil {
+		return nil, wrapError("Correlation", err)
+	}
+	resultSeries := make([]*Series, 0, n+1)
+	resultSeries = append(resultSeries, labelSeries)
 
 	for _, col1 := range numericColumns {
 		correlations := make([]float64, n)
@@ -494,10 +517,14 @@ func (df *DataFrame) Correlation() (*DataFrame, error) {
 			correlations[j] = corr
 		}
 
-		resultData[col1] = correlations
+		colSeries, err := newSeriesOwned(col1, correlations)
+		if err != nil {
+			return nil, wrapColumnError("Correlation", col1, err)
+		}
+		resultSeries = append(resultSeries, colSeries)
 	}
 
-	return NewDataFrameFromMap(resultData)
+	return NewDataFrameFromSeries(resultSeries...)
 }
 
 // Helper functions
