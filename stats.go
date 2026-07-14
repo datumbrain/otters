@@ -69,7 +69,7 @@ func (df *DataFrame) Mean(column string) (float64, error) {
 }
 
 // Min finds the minimum value in a numeric column
-func (df *DataFrame) Min(column string) (interface{}, error) {
+func (df *DataFrame) Min(column string) (any, error) {
 	if df.err != nil {
 		return nil, df.err
 	}
@@ -113,7 +113,7 @@ func (df *DataFrame) Min(column string) (interface{}, error) {
 }
 
 // Max finds the maximum value in a numeric column
-func (df *DataFrame) Max(column string) (interface{}, error) {
+func (df *DataFrame) Max(column string) (any, error) {
 	if df.err != nil {
 		return nil, df.err
 	}
@@ -319,9 +319,13 @@ func (df *DataFrame) Describe() (*DataFrame, error) {
 	// Statistics to calculate
 	stats := []string{"count", "mean", "std", "min", "25%", "50%", "75%", "max"}
 
-	// Create result data
-	resultData := make(map[string]interface{})
-	resultData["statistic"] = stats
+	// Create result data; avoid colliding with a data column named "statistic"
+	labelColumn := "statistic"
+	for contains(numericColumns, labelColumn) {
+		labelColumn += "_"
+	}
+	resultData := make(map[string]any)
+	resultData[labelColumn] = stats
 
 	// Calculate statistics for each numeric column
 	for _, colName := range numericColumns {
@@ -424,8 +428,12 @@ func (df *DataFrame) ValueCounts(column string) (*DataFrame, error) {
 		pairs = append(pairs, countPair{value, count})
 	}
 
+	// Sort by count descending, then value ascending so ties are deterministic
 	sort.Slice(pairs, func(i, j int) bool {
-		return pairs[i].count > pairs[j].count
+		if pairs[i].count != pairs[j].count {
+			return pairs[i].count > pairs[j].count
+		}
+		return pairs[i].value < pairs[j].value
 	})
 
 	for _, pair := range pairs {
@@ -433,9 +441,15 @@ func (df *DataFrame) ValueCounts(column string) (*DataFrame, error) {
 		frequencies = append(frequencies, int64(pair.count))
 	}
 
-	resultData := map[string]interface{}{
-		column:  values,
-		"count": frequencies,
+	// Avoid colliding with a data column literally named "count"
+	countColumn := "count"
+	if column == countColumn {
+		countColumn = "count_"
+	}
+
+	resultData := map[string]any{
+		column:      values,
+		countColumn: frequencies,
 	}
 
 	return NewDataFrameFromMap(resultData)
@@ -460,10 +474,14 @@ func (df *DataFrame) Correlation() (*DataFrame, error) {
 		return nil, newOpError("Correlation", "need at least 2 numeric columns for correlation")
 	}
 
-	// Calculate correlation matrix
+	// Calculate correlation matrix; avoid colliding with a column named "column"
+	labelColumn := "column"
+	for contains(numericColumns, labelColumn) {
+		labelColumn += "_"
+	}
 	n := len(numericColumns)
-	resultData := make(map[string]interface{})
-	resultData["column"] = numericColumns
+	resultData := make(map[string]any)
+	resultData[labelColumn] = numericColumns
 
 	for _, col1 := range numericColumns {
 		correlations := make([]float64, n)
@@ -485,7 +503,7 @@ func (df *DataFrame) Correlation() (*DataFrame, error) {
 // Helper functions
 
 // convertToFloat64 converts numeric values to float64
-func convertToFloat64(value interface{}) float64 {
+func convertToFloat64(value any) float64 {
 	switch v := value.(type) {
 	case int64:
 		return float64(v)

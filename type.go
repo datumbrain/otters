@@ -38,14 +38,27 @@ func (ct ColumnType) String() string {
 
 // Series represents a single column of data with a specific type
 type Series struct {
-	Name   string      // Column name
-	Type   ColumnType  // Data type
-	Data   interface{} // Actual data: []string, []int64, []float64, []bool, []time.Time
-	Length int         // Number of elements
+	Name   string     // Column name
+	Type   ColumnType // Data type
+	Data   any        // Actual data: []string, []int64, []float64, []bool, []time.Time
+	Length int        // Number of elements
 }
 
-// NewSeries creates a new Series with the given name and data
-func NewSeries(name string, data interface{}) (*Series, error) {
+// NewSeries creates a new Series with the given name and data.
+// The data slice is copied, so later mutations of the caller's slice
+// do not affect the Series.
+func NewSeries(name string, data any) (*Series, error) {
+	s, err := newSeriesOwned(name, data)
+	if err != nil {
+		return nil, err
+	}
+	return s.Copy(), nil
+}
+
+// newSeriesOwned creates a Series that takes ownership of the data slice
+// without copying it. Internal use only: callers must not retain or mutate
+// the slice after handing it over.
+func newSeriesOwned(name string, data any) (*Series, error) {
 	s := &Series{
 		Name: name,
 		Data: data,
@@ -79,7 +92,7 @@ func NewSeries(name string, data interface{}) (*Series, error) {
 }
 
 // Get returns the value at the specified index
-func (s *Series) Get(index int) (interface{}, error) {
+func (s *Series) Get(index int) (any, error) {
 	if index < 0 || index >= s.Length {
 		return nil, &OtterError{
 			Op:      "Series.Get",
@@ -174,7 +187,7 @@ func (s *Series) StringSlice() []string {
 }
 
 // Set updates the value at the specified index
-func (s *Series) Set(index int, value interface{}) error {
+func (s *Series) Set(index int, value any) error {
 	if index < 0 || index >= s.Length {
 		return &OtterError{
 			Op:      "Series.Set",
@@ -309,17 +322,24 @@ func InferType(values []string) ColumnType {
 	canBeFloat := true
 	canBeBool := true
 	canBeTime := true
+	sawValue := false
 
 	for _, value := range values {
 		value = strings.TrimSpace(value)
 		if value == "" {
 			continue
 		}
+		sawValue = true
 
 		canBeInt = canBeInt && canParseInt64(value)
 		canBeFloat = canBeFloat && canParseFloat64(value)
-		canBeBool = canBeBool && canParseBool(value)
+		canBeBool = canBeBool && isBoolLiteral(value)
 		canBeTime = canBeTime && isTimeValue(value)
+	}
+
+	// A column with no non-empty values carries no type information.
+	if !sawValue {
+		return StringType
 	}
 
 	return selectMostSpecificType(canBeBool, canBeInt, canBeFloat, canBeTime)
@@ -335,9 +355,12 @@ func canParseFloat64(value string) bool {
 	return err == nil
 }
 
-func canParseBool(value string) bool {
-	_, err := strconv.ParseBool(value)
-	return err == nil
+// isBoolLiteral reports whether the value is an explicit true/false spelling.
+// Deliberately stricter than strconv.ParseBool, which also accepts "0", "1",
+// "t", and "f" — treating those as bool would silently rewrite numeric flag
+// columns (e.g. CSV 0/1 data) as true/false.
+func isBoolLiteral(value string) bool {
+	return strings.EqualFold(value, "true") || strings.EqualFold(value, "false")
 }
 
 func selectMostSpecificType(canBeBool, canBeInt, canBeFloat, canBeTime bool) ColumnType {
@@ -378,7 +401,7 @@ func isTimeValue(value string) bool {
 }
 
 // ConvertValue converts a string value to the specified type
-func ConvertValue(value string, targetType ColumnType) (interface{}, error) {
+func ConvertValue(value string, targetType ColumnType) (any, error) {
 	value = strings.TrimSpace(value)
 
 	if value == "" {
@@ -404,7 +427,7 @@ func ConvertValue(value string, targetType ColumnType) (interface{}, error) {
 	}
 }
 
-func getZeroValue(targetType ColumnType) interface{} {
+func getZeroValue(targetType ColumnType) any {
 	switch targetType {
 	case StringType:
 		return ""

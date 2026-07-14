@@ -276,8 +276,8 @@ func buildDataFrameFromRows(headers []string, rows [][]string) (*DataFrame, erro
 			return nil, wrapColumnError("buildDataFrame", header, err)
 		}
 
-		// Create series
-		s, err := NewSeries(header, convertedData)
+		// Create series (convertedData is freshly built, safe to own)
+		s, err := newSeriesOwned(header, convertedData)
 		if err != nil {
 			return nil, wrapColumnError("buildDataFrame", header, err)
 		}
@@ -289,7 +289,7 @@ func buildDataFrameFromRows(headers []string, rows [][]string) (*DataFrame, erro
 }
 
 // convertStringSliceToType converts a slice of strings to the specified type
-func convertStringSliceToType(values []string, targetType ColumnType) (interface{}, error) {
+func convertStringSliceToType(values []string, targetType ColumnType) (any, error) {
 	switch targetType {
 	case StringType:
 		// Return a copy to avoid external modification
@@ -367,7 +367,7 @@ func cleanHeader(header string) string {
 }
 
 // formatValueForCSV formats a value for CSV output
-func formatValueForCSV(value interface{}) string {
+func formatValueForCSV(value any) string {
 	switch v := value.(type) {
 	case string:
 		return v

@@ -12,7 +12,7 @@ import (
 // Example_basicDataFrame demonstrates basic DataFrame operations
 func Example_basicDataFrame() {
 	// Create sample data
-	data := map[string]interface{}{
+	data := map[string]any{
 		"name":   []string{"Alice", "Bob", "Carol"},
 		"age":    []int64{25, 30, 35},
 		"salary": []float64{50000, 60000, 70000},
@@ -92,7 +92,7 @@ Frank,Sales,55000,1`
 // DemoStatistics demonstrates statistical analysis
 func DemoStatistics() {
 	// Sales data
-	data := map[string]interface{}{
+	data := map[string]any{
 		"region":  []string{"North", "South", "East", "West", "North", "South"},
 		"sales":   []float64{120000, 110000, 95000, 130000, 125000, 115000},
 		"quarter": []int64{1, 1, 1, 1, 2, 2},
@@ -312,7 +312,7 @@ Eve,North,Phone,720,0.03,2024-01-19`
 
 // Test basic DataFrame creation and operations
 func TestDataFrameBasics(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"numbers": []int64{1, 2, 3, 4, 5},
 		"names":   []string{"a", "b", "c", "d", "e"},
 	}
@@ -436,7 +436,7 @@ func TestTimeTypeHeadTail(t *testing.T) {
 // character do not cause key collisions (regression for GroupBy key bug).
 func TestGroupByKeyCollision(t *testing.T) {
 	// "a|b" and "a" with "b" are distinct groups but produced the same "|"-joined key.
-	data := map[string]interface{}{
+	data := map[string]any{
 		"category": []string{"a|b", "a|b", "a"},
 		"value":    []float64{1, 2, 10},
 	}
@@ -475,7 +475,7 @@ func TestGroupByKeyCollision(t *testing.T) {
 // TestSetErrorDoesNotMutateCaller verifies that a failed operation does not
 // corrupt the original DataFrame (regression for the setError mutation bug).
 func TestSetErrorDoesNotMutateCaller(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"a": []int64{1, 2, 3},
 	}
 	df, err := NewDataFrameFromMap(data)
@@ -516,7 +516,7 @@ func TestErrorHandling(t *testing.T) {
 func BenchmarkDataFrameOperations(b *testing.B) {
 	// Create test data
 	size := 10000
-	data := map[string]interface{}{
+	data := map[string]any{
 		"id":     make([]int64, size),
 		"value":  make([]float64, size),
 		"status": make([]string, size),
@@ -617,7 +617,7 @@ func DemoRealWorldUsage() {
 // TestDeterministicFromMap verifies that NewDataFrameFromMap always produces
 // columns in alphabetical order, regardless of map iteration order.
 func TestDeterministicFromMap(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"zebra": []int64{1, 2, 3},
 		"apple": []int64{4, 5, 6},
 		"mango": []int64{7, 8, 9},
@@ -643,7 +643,7 @@ func TestDeterministicFromMap(t *testing.T) {
 // TestDeterministicGroupBy verifies that GroupBy produces rows in the same
 // order across repeated calls.
 func TestDeterministicGroupBy(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"category": []string{"B", "A", "C", "A", "B", "C"},
 		"value":    []float64{10, 20, 30, 40, 50, 60},
 	}
@@ -680,7 +680,7 @@ func TestDeterministicGroupBy(t *testing.T) {
 // TestDataFrameManipulation covers Tail, Set, GetSeries, AddColumn, DropColumn,
 // RenameColumn, IsEmpty, and HasColumn.
 func TestDataFrameManipulation(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"id":   []int64{1, 2, 3, 4, 5},
 		"name": []string{"a", "b", "c", "d", "e"},
 	}
@@ -774,7 +774,7 @@ func TestDataFrameManipulation(t *testing.T) {
 
 // TestOpsOperations covers Drop, SortBy, Unique, Query, Where, and ResetIndex.
 func TestOpsOperations(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"a": []int64{3, 1, 2, 1, 3},
 		"b": []int64{30, 10, 20, 15, 35},
 		"c": []string{"x", "y", "z", "w", "v"},
@@ -851,7 +851,7 @@ func TestOpsOperations(t *testing.T) {
 
 // TestGroupByMinMax covers GroupBy.Min() and GroupBy.Max().
 func TestGroupByMinMax(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"dept":   []string{"Eng", "Eng", "Sales", "Sales"},
 		"salary": []float64{70000, 80000, 50000, 60000},
 	}
@@ -911,7 +911,7 @@ func TestGroupByMinMax(t *testing.T) {
 
 // TestStringOperators covers Filter with "contains", "startswith", and "endswith".
 func TestStringOperators(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"name": []string{"Alice", "Bob", "Albany", "Sara"},
 	}
 	df, err := NewDataFrameFromMap(data)
@@ -953,7 +953,7 @@ func TestStringOperators(t *testing.T) {
 // TestStatsOperations covers Median, Var, Quantile, Describe, ValueCounts,
 // Correlation, and NumericSummary.
 func TestStatsOperations(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"value":    []float64{10, 20, 30, 40, 50},
 		"category": []string{"a", "b", "a", "b", "a"},
 		"x":        []float64{1, 2, 3, 4, 5},
@@ -1046,7 +1046,7 @@ func TestStatsOperations(t *testing.T) {
 
 // TestCSVFileOperations covers file-based CSV I/O using os.CreateTemp.
 func TestCSVFileOperations(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"id":   []int64{1, 2, 3},
 		"name": []string{"Alice", "Bob", "Carol"},
 		"age":  []int64{25, 30, 35},

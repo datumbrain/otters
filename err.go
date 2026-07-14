@@ -68,16 +68,6 @@ func newRowError(op string, row int, message string) *OtterError {
 	}
 }
 
-// newCellError creates a new error for a specific cell operation
-func newCellError(op, column string, row int, message string) *OtterError {
-	return &OtterError{
-		Op:      op,
-		Column:  column,
-		Row:     row,
-		Message: message,
-	}
-}
-
 // wrapError wraps an existing error with operation context
 func wrapError(op string, cause error) *OtterError {
 	return &OtterError{
@@ -136,64 +126,57 @@ var ErrInvalidOperation = &OtterError{
 	Row:     -1,
 }
 
-// Helper functions for common error scenarios
-
-// isColumnNotFound checks if an error is a "column not found" error
-func isColumnNotFound(err error) bool {
-	if otterErr, ok := err.(*OtterError); ok {
-		return otterErr.Op == "ColumnAccess" || otterErr.Message == "column not found"
-	}
-	return false
-}
-
-// isIndexOutOfRange checks if an error is an "index out of range" error
-func isIndexOutOfRange(err error) bool {
-	if otterErr, ok := err.(*OtterError); ok {
-		return otterErr.Op == "IndexAccess" || otterErr.Message == "index out of range"
-	}
-	return false
-}
-
-// isTypeMismatch checks if an error is a type mismatch error
-func isTypeMismatch(err error) bool {
-	if otterErr, ok := err.(*OtterError); ok {
-		return otterErr.Op == "TypeConversion" || otterErr.Message == "type mismatch"
-	}
-	return false
-}
-
-// validateColumnExists checks if a column exists in the DataFrame
+// validateColumnExists checks if a column exists in the DataFrame.
+// The returned error matches ErrColumnNotFound under errors.Is.
 func (df *DataFrame) validateColumnExists(columnName string) error {
 	if df.err != nil {
 		return df.err
 	}
 
 	if _, exists := df.columns[columnName]; !exists {
-		return newColumnError("ColumnAccess", columnName, "column does not exist")
+		return &OtterError{
+			Op:      "ColumnAccess",
+			Column:  columnName,
+			Message: "column does not exist",
+			Row:     -1,
+			Cause:   ErrColumnNotFound,
+		}
 	}
 	return nil
 }
 
-// validateRowIndex checks if a row index is valid
+// validateRowIndex checks if a row index is valid.
+// The returned error matches ErrIndexOutOfRange under errors.Is.
 func (df *DataFrame) validateRowIndex(index int) error {
 	if df.err != nil {
 		return df.err
 	}
 
 	if index < 0 || index >= df.length {
-		return newRowError("IndexAccess", index, fmt.Sprintf("index %d out of range [0:%d]", index, df.length))
+		return &OtterError{
+			Op:      "IndexAccess",
+			Row:     index,
+			Message: fmt.Sprintf("index %d out of range [0:%d]", index, df.length),
+			Cause:   ErrIndexOutOfRange,
+		}
 	}
 	return nil
 }
 
-// validateNotEmpty checks if the DataFrame is not empty
+// validateNotEmpty checks if the DataFrame is not empty.
+// The returned error matches ErrEmptyDataFrame under errors.Is.
 func (df *DataFrame) validateNotEmpty() error {
 	if df.err != nil {
 		return df.err
 	}
 
 	if df.length == 0 {
-		return newOpError("Operation", "cannot operate on empty DataFrame")
+		return &OtterError{
+			Op:      "Operation",
+			Message: "cannot operate on empty DataFrame",
+			Row:     -1,
+			Cause:   ErrEmptyDataFrame,
+		}
 	}
 	return nil
 }
@@ -233,16 +216,6 @@ func (df *DataFrame) setError(err error) *DataFrame {
 	newDf := NewDataFrame()
 	newDf.err = err
 	return newDf
-}
-
-// clearError clears the error state (used internally)
-func (df *DataFrame) clearError() {
-	df.err = nil
-}
-
-// hasError checks if the DataFrame has an error state
-func (df *DataFrame) hasError() bool {
-	return df.err != nil
 }
 
 // Error returns the current error state of the DataFrame

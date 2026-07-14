@@ -6,7 +6,7 @@ import (
 )
 
 func TestSelectEdgeCases(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3},
 		"col2": []string{"a", "b", "c"},
 		"col3": []float64{1.1, 2.2, 3.3},
@@ -25,7 +25,7 @@ func TestSelectEdgeCases(t *testing.T) {
 }
 
 func TestDropEdgeCases(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 3},
 		"col2": []string{"a", "b", "c"},
 	}
@@ -43,7 +43,7 @@ func TestDropEdgeCases(t *testing.T) {
 }
 
 func TestSortByEdgeCases(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{3, 1, 2},
 		"col2": []string{"c", "a", "b"},
 	}
@@ -67,7 +67,7 @@ func TestSortByEdgeCases(t *testing.T) {
 }
 
 func TestUniqueEdgeCases(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"col1": []int64{1, 2, 1, 3, 2},
 	}
 	df, _ := NewDataFrameFromMap(data)
@@ -82,7 +82,7 @@ func TestUniqueEdgeCases(t *testing.T) {
 }
 
 func TestQueryEdgeCases(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"age": []int64{25, 30, 35, 40},
 	}
 	df, _ := NewDataFrameFromMap(data)
@@ -224,7 +224,7 @@ func TestFilterIndicesTypedEdgeCases(t *testing.T) {
 }
 
 func TestGroupBy_MeanCount(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"category": []string{"A", "B", "A", "B"},
 		"value":    []int64{10, 20, 30, 40},
 	}
@@ -415,7 +415,7 @@ func TestMatchTime(t *testing.T) {
 func TestEmptySliceForType(t *testing.T) {
 	tests := []struct {
 		ct   ColumnType
-		want interface{}
+		want any
 	}{
 		{StringType, []string{}},
 		{Int64Type, []int64{}},
@@ -521,5 +521,119 @@ func TestMeanFloat64(t *testing.T) {
 	result := meanFloat64(data, []int{0, 2, 4})
 	if result != 3.0 {
 		t.Errorf("meanFloat64 = %v, want 3", result)
+	}
+}
+
+// Regression: Filter on an int64 column with a fractional float comparison
+// value must not truncate the value (2.5 -> 2), which returned rows that
+// must not match.
+func TestFilterIntColumnWithFractionalFloat(t *testing.T) {
+	df, err := NewDataFrameFromMap(map[string]any{
+		"n": []int64{1, 2, 3},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// No integer equals 2.5 — result must be empty.
+	eq := df.Filter("n", "==", 2.5)
+	if eq.Error() != nil {
+		t.Fatalf("unexpected error: %v", eq.Error())
+	}
+	if rows := eq.Len(); rows != 0 {
+		t.Errorf("Filter(n == 2.5) on ints returned %d rows, want 0", rows)
+	}
+
+	// n >= 2.5 must exclude 2.
+	ge := df.Filter("n", ">=", 2.5)
+	if rows := ge.Len(); rows != 1 {
+		t.Errorf("Filter(n >= 2.5) returned %d rows, want 1 (only 3)", rows)
+	}
+}
+
+// Regression: GroupBy(...).Count() on a DataFrame with no numeric columns
+// used to return only the group columns — the count itself was dropped.
+func TestGroupByCountWithoutNumericColumns(t *testing.T) {
+	df, err := NewDataFrameFromMap(map[string]any{
+		"city": []string{"NYC", "LA", "NYC"},
+		"name": []string{"a", "b", "c"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := df.GroupBy("city").Count()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cols := result.Columns()
+	if len(cols) < 2 {
+		t.Fatalf("GroupBy.Count() returned columns %v — the count column is missing", cols)
+	}
+
+	// Groups are sorted by key: LA (1 row), NYC (2 rows).
+	wantCounts := []int64{1, 2}
+	for i, want := range wantCounts {
+		v, err := result.Get(i, "count")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if v.(int64) != want {
+			t.Errorf("count[%d] = %v, want %d", i, v, want)
+		}
+	}
+}
+
+// Regression: Select with the same column listed twice used to corrupt
+// internal state (order got two entries but the columns map had one).
+func TestSelectDuplicateColumn(t *testing.T) {
+	df, err := NewDataFrameFromMap(map[string]any{
+		"a": []int64{1, 2},
+		"b": []int64{3, 4},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sel := df.Select("a", "a")
+	if sel.Error() == nil {
+		t.Error("Select with duplicate columns should return an error")
+	}
+}
+
+// Regression: Sort used to be unstable, so rows with equal keys could be
+// reordered arbitrarily between runs.
+func TestSortStability(t *testing.T) {
+	n := 64
+	keys := make([]int64, n)
+	seq := make([]int64, n)
+	for i := 0; i < n; i++ {
+		keys[i] = int64(i % 2) // many ties
+		seq[i] = int64(i)
+	}
+	df, err := NewDataFrameFromMap(map[string]any{
+		"key": keys,
+		"seq": seq,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sorted := df.Sort("key", true)
+	if sorted.Error() != nil {
+		t.Fatal(sorted.Error())
+	}
+
+	prev := int64(-1)
+	prevKey := int64(-1)
+	for i := 0; i < sorted.Len(); i++ {
+		k, _ := sorted.Get(i, "key")
+		s, _ := sorted.Get(i, "seq")
+		if k.(int64) == prevKey && s.(int64) < prev {
+			t.Fatalf("unstable sort: within key=%d, seq %d appears after %d", prevKey, s.(int64), prev)
+		}
+		prevKey = k.(int64)
+		prev = s.(int64)
 	}
 }

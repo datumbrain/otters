@@ -71,13 +71,6 @@ func TestNewRowError(t *testing.T) {
 	}
 }
 
-func TestNewCellError(t *testing.T) {
-	err := newCellError("TestOp", "col1", 5, "test message")
-	if err.Op != "TestOp" || err.Row != 5 || err.Column != "col1" {
-		t.Errorf("newCellError() failed")
-	}
-}
-
 func TestWrapColumnError(t *testing.T) {
 	cause := errors.New("cause")
 	err := wrapColumnError("TestOp", "col1", cause)
@@ -86,42 +79,27 @@ func TestWrapColumnError(t *testing.T) {
 	}
 }
 
-func TestIsColumnNotFound(t *testing.T) {
-	err := &OtterError{
-		Op:      "TestOp",
-		Column:  "col1",
-		Message: "column not found",
-		Row:     -1,
+// TestSentinelErrorsMatchWithErrorsIs verifies that errors produced by the
+// library match the exported sentinel errors under errors.Is.
+func TestSentinelErrorsMatchWithErrorsIs(t *testing.T) {
+	df, err := NewDataFrameFromMap(map[string]any{
+		"a": []int64{1, 2, 3},
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !isColumnNotFound(err) {
-		t.Error("isColumnNotFound() should return true")
-	}
-	if isColumnNotFound(errors.New("other")) {
-		t.Error("isColumnNotFound() should return false for non-OtterError")
-	}
-}
 
-func TestIsIndexOutOfRange(t *testing.T) {
-	err := &OtterError{
-		Op:      "TestOp",
-		Row:     5,
-		Message: "index out of range",
+	if _, err := df.Get(0, "missing"); !errors.Is(err, ErrColumnNotFound) {
+		t.Errorf("missing column error should match ErrColumnNotFound, got %v", err)
 	}
-	if !isIndexOutOfRange(err) {
-		t.Error("isIndexOutOfRange() should return true")
-	}
-	if isIndexOutOfRange(errors.New("other")) {
-		t.Error("isIndexOutOfRange() should return false for non-OtterError")
-	}
-}
 
-func TestIsTypeMismatch(t *testing.T) {
-	err := newOpError("TestOp", "type mismatch")
-	if !isTypeMismatch(err) {
-		t.Error("isTypeMismatch() should return true")
+	if _, err := df.Get(99, "a"); !errors.Is(err, ErrIndexOutOfRange) {
+		t.Errorf("out-of-range error should match ErrIndexOutOfRange, got %v", err)
 	}
-	if isTypeMismatch(errors.New("other")) {
-		t.Error("isTypeMismatch() should return false for non-OtterError")
+
+	empty := NewDataFrame()
+	if _, err := empty.Mean("a"); !errors.Is(err, ErrEmptyDataFrame) && !errors.Is(err, ErrColumnNotFound) {
+		t.Errorf("empty DataFrame error should match a sentinel, got %v", err)
 	}
 }
 

@@ -2,6 +2,8 @@ package otters
 
 import (
 	"fmt"
+	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -9,7 +11,7 @@ import (
 )
 
 // Filter creates a new DataFrame with rows that match the condition
-func (df *DataFrame) Filter(column, operator string, value interface{}) *DataFrame {
+func (df *DataFrame) Filter(column, operator string, value any) *DataFrame {
 	if df.err != nil {
 		return df
 	}
@@ -34,7 +36,7 @@ func (df *DataFrame) Filter(column, operator string, value interface{}) *DataFra
 }
 
 // filterIndicesTyped returns matching indices using typed slice access to avoid boxing.
-func filterIndicesTyped(series *Series, operator string, value interface{}) ([]int, error) {
+func filterIndicesTyped(series *Series, operator string, value any) ([]int, error) {
 	switch series.Type {
 	case Int64Type:
 		return filterInt64Indices(series.Data.([]int64), operator, value)
@@ -50,7 +52,20 @@ func filterIndicesTyped(series *Series, operator string, value interface{}) ([]i
 	return nil, nil
 }
 
-func filterInt64Indices(data []int64, op string, value interface{}) ([]int, error) {
+func filterInt64Indices(data []int64, op string, value any) ([]int, error) {
+	// A fractional comparison value cannot be truncated to int64 without
+	// changing the predicate (e.g. "== 2.5" would match 2); compare in
+	// float64 space instead.
+	if f, isFloat := value.(float64); isFloat && f != math.Trunc(f) {
+		indices := make([]int, 0, len(data)/4)
+		for i, v := range data {
+			if matchFloat64(float64(v), op, f) {
+				indices = append(indices, i)
+			}
+		}
+		return indices, nil
+	}
+
 	cmp, ok := toInt64(value)
 	if !ok {
 		return nil, newOpError("Filter", fmt.Sprintf("cannot convert %T to int64", value))
@@ -64,7 +79,7 @@ func filterInt64Indices(data []int64, op string, value interface{}) ([]int, erro
 	return indices, nil
 }
 
-func filterFloat64Indices(data []float64, op string, value interface{}) ([]int, error) {
+func filterFloat64Indices(data []float64, op string, value any) ([]int, error) {
 	cmp, ok := toFloat64(value)
 	if !ok {
 		return nil, newOpError("Filter", fmt.Sprintf("cannot convert %T to float64", value))
@@ -78,7 +93,7 @@ func filterFloat64Indices(data []float64, op string, value interface{}) ([]int, 
 	return indices, nil
 }
 
-func filterStringIndices(data []string, op string, value interface{}) ([]int, error) {
+func filterStringIndices(data []string, op string, value any) ([]int, error) {
 	cmp, ok := value.(string)
 	if !ok {
 		cmp = fmt.Sprintf("%v", value)
@@ -92,7 +107,7 @@ func filterStringIndices(data []string, op string, value interface{}) ([]int, er
 	return indices, nil
 }
 
-func filterBoolIndices(data []bool, op string, value interface{}) ([]int, error) {
+func filterBoolIndices(data []bool, op string, value any) ([]int, error) {
 	cmp, ok := value.(bool)
 	if !ok {
 		return nil, newOpError("Filter", fmt.Sprintf("cannot convert %T to bool", value))
@@ -106,7 +121,7 @@ func filterBoolIndices(data []bool, op string, value interface{}) ([]int, error)
 	return indices, nil
 }
 
-func filterTimeIndices(data []time.Time, op string, value interface{}) ([]int, error) {
+func filterTimeIndices(data []time.Time, op string, value any) ([]int, error) {
 	cmp, ok := value.(time.Time)
 	if !ok {
 		return nil, newOpError("Filter", fmt.Sprintf("cannot convert %T to time.Time", value))
@@ -120,7 +135,7 @@ func filterTimeIndices(data []time.Time, op string, value interface{}) ([]int, e
 	return indices, nil
 }
 
-func toInt64(v interface{}) (int64, bool) {
+func toInt64(v any) (int64, bool) {
 	switch x := v.(type) {
 	case int64:
 		return x, true
@@ -132,7 +147,7 @@ func toInt64(v interface{}) (int64, bool) {
 	return 0, false
 }
 
-func toFloat64(v interface{}) (float64, bool) {
+func toFloat64(v any) (float64, bool) {
 	switch x := v.(type) {
 	case float64:
 		return x, true
@@ -246,6 +261,14 @@ func (df *DataFrame) Select(columns ...string) *DataFrame {
 		return df.setError(err)
 	}
 
+	seen := make(map[string]bool, len(columns))
+	for _, colName := range columns {
+		if seen[colName] {
+			return df.setError(newColumnError("Select", colName, "column specified more than once"))
+		}
+		seen[colName] = true
+	}
+
 	newDf := NewDataFrame()
 	newDf.length = df.length
 
@@ -329,25 +352,26 @@ func (df *DataFrame) SortBy(columns []string, ascending []bool) *DataFrame {
 		indices[i] = i
 	}
 
-	// Sort indices based on column values
+	// Build one typed comparator per sort column so the hot comparison loop
+	// touches typed slices directly instead of boxing values through Get.
+	comparators := make([]func(a, b int) int, len(columns))
+	for k, colName := range columns {
+		cmp := typedComparator(df.columns[colName])
+		if cmp == nil {
+			return df.setError(newColumnError("SortBy", colName, "unsupported column type for sorting"))
+		}
+		comparators[k] = cmp
+	}
+
+	// Sort indices based on column values. Ties break on the original row
+	// index, which makes the comparison a strict total order — the result is
+	// identical to a stable sort while keeping the faster unstable algorithm.
 	sort.Slice(indices, func(i, j int) bool {
 		rowI, rowJ := indices[i], indices[j]
 
 		// Compare by each column in order
-		for k, colName := range columns {
-			series := df.columns[colName]
-
-			valueI, err := series.Get(rowI)
-			if err != nil {
-				return false // Handle error gracefully in sort
-			}
-
-			valueJ, err := series.Get(rowJ)
-			if err != nil {
-				return false
-			}
-
-			cmp := compareValues(valueI, valueJ, series.Type)
+		for k, compare := range comparators {
+			cmp := compare(rowI, rowJ)
 			if cmp != 0 {
 				if ascending[k] {
 					return cmp < 0
@@ -355,7 +379,7 @@ func (df *DataFrame) SortBy(columns []string, ascending []bool) *DataFrame {
 				return cmp > 0
 			}
 		}
-		return false // Equal values
+		return rowI < rowJ // Equal keys: preserve original row order
 	})
 
 	// Create new DataFrame with sorted rows
@@ -363,7 +387,7 @@ func (df *DataFrame) SortBy(columns []string, ascending []bool) *DataFrame {
 }
 
 // uniqueFromSeries extracts unique values from a series.
-func uniqueFromSeries(series *Series) []interface{} {
+func uniqueFromSeries(series *Series) []any {
 	switch series.Type {
 	case StringType:
 		return uniqueStrings(series.Data.([]string))
@@ -379,9 +403,9 @@ func uniqueFromSeries(series *Series) []interface{} {
 	return nil
 }
 
-func uniqueStrings(data []string) []interface{} {
+func uniqueStrings(data []string) []any {
 	seen := make(map[string]bool, len(data)/4)
-	unique := make([]interface{}, 0, len(data)/4)
+	unique := make([]any, 0, len(data)/4)
 	for _, v := range data {
 		if !seen[v] {
 			seen[v] = true
@@ -391,9 +415,9 @@ func uniqueStrings(data []string) []interface{} {
 	return unique
 }
 
-func uniqueInt64(data []int64) []interface{} {
+func uniqueInt64(data []int64) []any {
 	seen := make(map[string]bool, len(data)/4)
-	unique := make([]interface{}, 0, len(data)/4)
+	unique := make([]any, 0, len(data)/4)
 	for _, v := range data {
 		key := strconv.FormatInt(v, 10)
 		if !seen[key] {
@@ -404,9 +428,9 @@ func uniqueInt64(data []int64) []interface{} {
 	return unique
 }
 
-func uniqueFloat64(data []float64) []interface{} {
+func uniqueFloat64(data []float64) []any {
 	seen := make(map[string]bool, len(data)/4)
-	unique := make([]interface{}, 0, len(data)/4)
+	unique := make([]any, 0, len(data)/4)
 	for _, v := range data {
 		key := strconv.FormatFloat(v, 'g', -1, 64)
 		if !seen[key] {
@@ -417,9 +441,9 @@ func uniqueFloat64(data []float64) []interface{} {
 	return unique
 }
 
-func uniqueBool(data []bool) []interface{} {
+func uniqueBool(data []bool) []any {
 	seen := make(map[string]bool, 2)
-	unique := make([]interface{}, 0, 2)
+	unique := make([]any, 0, 2)
 	for _, v := range data {
 		key := "false"
 		if v {
@@ -433,9 +457,9 @@ func uniqueBool(data []bool) []interface{} {
 	return unique
 }
 
-func uniqueTime(data []time.Time) []interface{} {
+func uniqueTime(data []time.Time) []any {
 	seen := make(map[string]bool, len(data)/4)
-	unique := make([]interface{}, 0, len(data)/4)
+	unique := make([]any, 0, len(data)/4)
 	for _, v := range data {
 		key := v.String()
 		if !seen[key] {
@@ -447,7 +471,7 @@ func uniqueTime(data []time.Time) []interface{} {
 }
 
 // Unique returns unique values from a specified column
-func (df *DataFrame) Unique(column string) ([]interface{}, error) {
+func (df *DataFrame) Unique(column string) ([]any, error) {
 	if df.err != nil {
 		return nil, df.err
 	}
@@ -479,7 +503,7 @@ func (df *DataFrame) GroupBy(columns ...string) *GroupBy {
 }
 
 // Where is an alias for Filter (Pandas compatibility)
-func (df *DataFrame) Where(column, operator string, value interface{}) *DataFrame {
+func (df *DataFrame) Where(column, operator string, value any) *DataFrame {
 	return df.Filter(column, operator, value)
 }
 
@@ -489,15 +513,15 @@ func (df *DataFrame) Query(query string) *DataFrame {
 		return df
 	}
 
-	// Parse simple queries like "age > 25" or "name == 'John'"
+	// Parse simple queries like "age > 25" or "name == 'John Smith'"
 	parts := strings.Fields(query)
-	if len(parts) != 3 {
+	if len(parts) < 3 {
 		return df.setError(newOpError("Query", "query must be in format 'column operator value'"))
 	}
 
 	column := parts[0]
 	operator := parts[1]
-	valueStr := parts[2]
+	valueStr := strings.Join(parts[2:], " ")
 
 	// Remove quotes if present
 	if strings.HasPrefix(valueStr, "'") && strings.HasSuffix(valueStr, "'") {
@@ -564,7 +588,7 @@ func (gb *GroupBy) Max() (*DataFrame, error) {
 // Internal helper methods
 
 // selectSeriesRows extracts rows at indices from a series, returning new data slice.
-func selectSeriesRows(series *Series, indices []int) interface{} {
+func selectSeriesRows(series *Series, indices []int) any {
 	switch series.Type {
 	case StringType:
 		return selectStringRows(series.Data.([]string), indices)
@@ -622,7 +646,7 @@ func selectTimeRows(data []time.Time, indices []int) []time.Time {
 }
 
 // emptySliceForType returns an empty slice for the given column type.
-func emptySliceForType(colType ColumnType) interface{} {
+func emptySliceForType(colType ColumnType) any {
 	switch colType {
 	case StringType:
 		return []string{}
@@ -645,7 +669,7 @@ func (df *DataFrame) selectRows(indices []int, operation string) *DataFrame {
 		newDf := NewDataFrame()
 		for _, colName := range df.order {
 			series := df.columns[colName]
-			newSeries, err := NewSeries(series.Name, emptySliceForType(series.Type))
+			newSeries, err := newSeriesOwned(series.Name, emptySliceForType(series.Type))
 			if err != nil {
 				return df.setError(wrapError(operation, err))
 			}
@@ -663,7 +687,7 @@ func (df *DataFrame) selectRows(indices []int, operation string) *DataFrame {
 		if newData == nil {
 			return df.setError(newOpError(operation, fmt.Sprintf("unsupported type for column %s", colName)))
 		}
-		newSeries, err := NewSeries(series.Name, newData)
+		newSeries, err := newSeriesOwned(series.Name, newData)
 		if err != nil {
 			return df.setError(wrapColumnError(operation, colName, err))
 		}
@@ -676,21 +700,27 @@ func (df *DataFrame) selectRows(indices []int, operation string) *DataFrame {
 	return newDf
 }
 
-// compareValues compares two values of the same type, returns -1, 0, or 1
-func compareValues(a, b interface{}, columnType ColumnType) int {
-	switch columnType {
+// typedComparator returns a function comparing the values at two row indices
+// of a series without boxing. Returns nil for unsupported types.
+func typedComparator(series *Series) func(a, b int) int {
+	switch series.Type {
 	case StringType:
-		return compareStrings(a.(string), b.(string))
+		data := series.Data.([]string)
+		return func(a, b int) int { return compareStrings(data[a], data[b]) }
 	case Int64Type:
-		return compareInt64(a.(int64), b.(int64))
+		data := series.Data.([]int64)
+		return func(a, b int) int { return compareInt64(data[a], data[b]) }
 	case Float64Type:
-		return compareFloat64(a.(float64), b.(float64))
+		data := series.Data.([]float64)
+		return func(a, b int) int { return compareFloat64(data[a], data[b]) }
 	case BoolType:
-		return compareBool(a.(bool), b.(bool))
+		data := series.Data.([]bool)
+		return func(a, b int) int { return compareBool(data[a], data[b]) }
 	case TimeType:
-		return compareTime(a.(time.Time), b.(time.Time))
+		data := series.Data.([]time.Time)
+		return func(a, b int) int { return compareTime(data[a], data[b]) }
 	default:
-		return 0
+		return nil
 	}
 }
 
@@ -817,6 +847,20 @@ func (gb *GroupBy) aggregate(operation string) (*DataFrame, error) {
 	numGroups := len(sortedKeys)
 
 	groupColData := allocateGroupColumns(gb.columns, numGroups)
+
+	// Count is the size of each group, independent of any numeric columns.
+	if operation == "count" {
+		counts := make([]int64, 0, numGroups)
+		for _, k := range sortedKeys {
+			g := groups[k]
+			for j := range gb.columns {
+				groupColData[j] = append(groupColData[j], g.values[j])
+			}
+			counts = append(counts, int64(len(g.indices)))
+		}
+		return buildCountDataFrame(gb.columns, groupColData, counts)
+	}
+
 	numericCols := identifyNumericColumns(gb.df, gb.columns, numGroups)
 
 	if err := processGroups(gb, groups, sortedKeys, groupColData, numericCols, operation); err != nil {
@@ -883,11 +927,37 @@ func processGroups(gb *GroupBy, groups map[string]*groupKey, sortedKeys []string
 	return nil
 }
 
+// buildCountDataFrame builds the GroupBy.Count result: group columns plus a
+// "count" column holding each group's row count.
+func buildCountDataFrame(columns []string, groupColData [][]string, counts []int64) (*DataFrame, error) {
+	countName := "count"
+	for contains(columns, countName) {
+		countName += "_"
+	}
+
+	resultSeries := make([]*Series, 0, len(columns)+1)
+	for j, col := range columns {
+		s, err := newSeriesOwned(col, groupColData[j])
+		if err != nil {
+			return nil, err
+		}
+		resultSeries = append(resultSeries, s)
+	}
+
+	countSeries, err := newSeriesOwned(countName, counts)
+	if err != nil {
+		return nil, err
+	}
+	resultSeries = append(resultSeries, countSeries)
+
+	return NewDataFrameFromSeries(resultSeries...)
+}
+
 func buildResultDataFrame(columns []string, groupColData [][]string, numericCols []numericCol) (*DataFrame, error) {
 	resultSeries := make([]*Series, 0, len(columns)+len(numericCols))
 
 	for j, col := range columns {
-		s, err := NewSeries(col, groupColData[j])
+		s, err := newSeriesOwned(col, groupColData[j])
 		if err != nil {
 			return nil, err
 		}
@@ -895,7 +965,7 @@ func buildResultDataFrame(columns []string, groupColData [][]string, numericCols
 	}
 
 	for _, nc := range numericCols {
-		s, err := NewSeries(nc.name, nc.data)
+		s, err := newSeriesOwned(nc.name, nc.data)
 		if err != nil {
 			return nil, err
 		}
@@ -1031,10 +1101,5 @@ func maxFloat64(data []float64, indices []int) float64 {
 
 // contains checks if a slice contains a string
 func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(slice, item)
 }

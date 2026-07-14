@@ -31,7 +31,7 @@ func NewDataFrameFromSeries(series ...*Series) (*DataFrame, error) {
 }
 
 // NewDataFrameFromMap creates a DataFrame from a map of column data
-func NewDataFrameFromMap(data map[string]interface{}) (*DataFrame, error) {
+func NewDataFrameFromMap(data map[string]any) (*DataFrame, error) {
 	if len(data) == 0 {
 		return NewDataFrame(), nil
 	}
@@ -157,7 +157,7 @@ func (df *DataFrame) Tail(n int) *DataFrame {
 }
 
 // Get returns the value at the specified row and column
-func (df *DataFrame) Get(row int, column string) (interface{}, error) {
+func (df *DataFrame) Get(row int, column string) (any, error) {
 	if df.err != nil {
 		return nil, df.err
 	}
@@ -174,7 +174,7 @@ func (df *DataFrame) Get(row int, column string) (interface{}, error) {
 }
 
 // Set updates the value at the specified row and column
-func (df *DataFrame) Set(row int, column string, value interface{}) error {
+func (df *DataFrame) Set(row int, column string, value any) error {
 	if df.err != nil {
 		return df.err
 	}
@@ -394,7 +394,7 @@ func (df *DataFrame) slice(start, end int, operation string) *DataFrame {
 
 	for _, colName := range df.order {
 		series := df.columns[colName]
-		var newData interface{}
+		var newData any
 
 		// Slice the appropriate data type
 		switch series.Type {
@@ -422,7 +422,7 @@ func (df *DataFrame) slice(start, end int, operation string) *DataFrame {
 			return df.setError(newOpError(operation, "unsupported column type for slicing"))
 		}
 
-		newSeries, err := NewSeries(series.Name, newData)
+		newSeries, err := newSeriesOwned(series.Name, newData)
 		if err != nil {
 			return df.setError(wrapError(operation, err))
 		}
@@ -431,12 +431,4 @@ func (df *DataFrame) slice(start, end int, operation string) *DataFrame {
 	}
 
 	return newDf
-}
-
-// reset clears all data in the DataFrame
-func (df *DataFrame) reset() {
-	df.columns = make(map[string]*Series)
-	df.order = make([]string, 0)
-	df.length = 0
-	df.err = nil
 }

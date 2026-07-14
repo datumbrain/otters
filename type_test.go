@@ -115,7 +115,7 @@ func TestSeries_StringSlice(t *testing.T) {
 func TestGetZeroValue(t *testing.T) {
 	tests := []struct {
 		ct   ColumnType
-		want interface{}
+		want any
 	}{
 		{StringType, ""},
 		{Int64Type, int64(0)},
@@ -244,5 +244,14 @@ func TestSeries_Set_EdgeCases(t *testing.T) {
 	val, _ := s.GetInt64(1)
 	if val != 42 {
 		t.Error("Set did not update value")
+	}
+}
+
+// Regression: a column consisting only of empty strings used to be inferred
+// as BoolType, silently converting the data to `false`.
+func TestInferTypeAllEmptyStrings(t *testing.T) {
+	got := InferType([]string{"", "", ""})
+	if got != StringType {
+		t.Errorf("InferType(all empty) = %v, want StringType", got)
 	}
 }
