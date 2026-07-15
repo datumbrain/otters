@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [1.0.7] — 2026-07-16
+
+### Added
+
+- **JSONL (JSON Lines) support** — `ReadJSONL`, `ReadJSONLWithOptions`, `ReadJSONLFromString`, `ReadJSONLFromStringWithOptions`, and `WriteJSONL`, mirroring the CSV API. `JSONLOptions` supports `SkipRows` and `MaxRows`. The schema is the union of keys across all lines in first-seen order; missing keys and `null` fill with the column type's zero value (the same convention as empty CSV cells). JSON's native types are respected — string `"123"` stays a string, integer-valued numbers become `Int64Type` (decoded via `json.Number`, no float64 collapse), and a string column of RFC3339 timestamps becomes `TimeType`. Columns mixing types across lines promote to string with canonical formatting, and nested objects/arrays are stringified as compact JSON. `WriteJSONL` emits one object per row with keys in column order, times as RFC3339, and zero times / NaN / ±Inf as `null`; output round-trips cleanly through `ReadJSONL`. Malformed lines error with their 1-based line number; blank lines are skipped.
+
+---
+
 ## [1.0.6] — 2026-07-15
 
 ### Added

@@ -15,7 +15,7 @@ Otters is a high-performance DataFrame library for Go, inspired by Pandas but de
 - 🛡️ **Memory safe** - No shared slices, proper error handling
 - 🐍 **Pandas-like API** - Familiar for data scientists
 - 🌊 **Fluent interface** - Chain operations naturally
-- 📁 **CSV support** - Read/write with automatic type inference
+- 📁 **CSV & JSONL support** - Read/write with automatic type inference
 - 🔍 **Rich operations** - Filter, sort, select, group, join
 - 📊 **Built-in statistics** - Sum, mean, std, describe, and more
 
@@ -237,7 +237,25 @@ df, err := otters.ReadCSVWithOptions("data.csv", otters.CSVOptions{
     SkipRows:  2,
     MaxRows:   1000,
 })
+
+// JSONL (one flat JSON object per line — logs, API dumps, ML datasets)
+df, err := otters.ReadJSONL("events.jsonl")
+df, err := otters.ReadJSONLFromString(`{"user":"alice","n":1}`)
+err = df.WriteJSONL("output.jsonl")
+
+// With options
+df, err := otters.ReadJSONLWithOptions("events.jsonl", otters.JSONLOptions{
+    SkipRows: 1,
+    MaxRows:  1000,
+})
 ```
+
+JSONL reading builds the schema as the union of keys across all lines (in
+first-seen order). Missing keys and `null` fill with the column type's zero
+value. JSON's native types are respected — a JSON string `"123"` stays a
+string — integer columns stay `int64`, RFC3339 string columns become time,
+mixed-type columns fall back to string, and nested objects/arrays are
+stringified as compact JSON.
 
 ## 🎯 Design Philosophy
 
@@ -285,6 +303,7 @@ Coming from Pandas? Here's how Otters compares:
 
 - [x] Core DataFrame with type safety
 - [x] CSV I/O with type inference
+- [x] JSONL I/O with type inference
 - [x] Basic operations (filter, select, sort)
 - [x] Essential statistics
 - [x] Fluent API with error handling
@@ -293,7 +312,7 @@ Coming from Pandas? Here's how Otters compares:
 
 - [ ] GroupBy operations
 - [ ] Join operations (inner, left, right, outer)
-- [ ] More file formats (JSON, Parquet)
+- [ ] More file formats (JSON arrays, Parquet)
 - [ ] Advanced statistics
 - [ ] Data visualization helpers
 - [ ] Streaming operations for large files
