@@ -4,7 +4,7 @@ _Smooth, intelligent data processing for Go._
 
 Otters is a high-performance DataFrame library for Go, inspired by Pandas but designed for Go's strengths: type safety, performance, and simplicity.
 
-[![Go Version](https://img.shields.io/badge/go-1.19+-blue.svg)](https://golang.org)
+[![Go Version](https://img.shields.io/badge/go-1.23+-blue.svg)](https://golang.org)
 [![Go Report Card](https://goreportcard.com/badge/github.com/datumbrain/otters)](https://goreportcard.com/report/github.com/datumbrain/otters)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -16,7 +16,7 @@ Otters is a high-performance DataFrame library for Go, inspired by Pandas but de
 - 🐍 **Pandas-like API** - Familiar for data scientists
 - 🌊 **Fluent interface** - Chain operations naturally
 - 📁 **CSV & JSONL support** - Read/write with automatic type inference
-- 🔍 **Rich operations** - Filter, sort, select, group, join
+- 🔍 **Rich operations** - Filter, sort, select, group, query
 - 📊 **Built-in statistics** - Sum, mean, std, describe, and more
 
 ## 🚀 Quick Start
@@ -299,27 +299,28 @@ Coming from Pandas? Here's how Otters compares:
 
 ## 🚧 Roadmap
 
-### ✅ MVP (Current)
+### ✅ Shipped
 
 - [x] Core DataFrame with type safety
 - [x] CSV I/O with type inference
 - [x] JSONL I/O with type inference
 - [x] Basic operations (filter, select, sort)
-- [x] Essential statistics
+- [x] GroupBy with aggregations (sum, mean, count, min, max)
+- [x] Simple query strings (`Query("age > 25")`) and `Where`
+- [x] Statistics (describe, median, variance, quantiles, correlation, value counts)
+- [x] Lazy views for chained operations (`df.Lazy()...Collect()`)
 - [x] Fluent API with error handling
 
 ### 🔄 Coming Soon
 
-- [ ] GroupBy operations
 - [ ] Join operations (inner, left, right, outer)
 - [ ] More file formats (JSON arrays, Parquet)
-- [ ] Advanced statistics
 - [ ] Data visualization helpers
 - [ ] Streaming operations for large files
 
 ### 🎯 Future
 
-- [ ] SQL-like query interface
+- [ ] Full SQL-like query interface (compound AND/OR expressions)
 - [ ] Integration with popular Go ML libraries
 - [ ] Advanced time series operations
 - [ ] Distributed processing capabilities
