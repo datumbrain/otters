@@ -34,12 +34,14 @@ goos: darwin
 goarch: arm64
 pkg: github.com/datumbrain/otters
 cpu: Apple M2 Pro
-BenchmarkDataFrameOperations/Filter-10         	   14218	     86220 ns/op	  482570 B/op	      20 allocs/op
-BenchmarkDataFrameOperations/Sort-10           	    3201	    353629 ns/op	  570477 B/op	   20039 allocs/op
-BenchmarkDataFrameOperations/GroupBy-10        	    1492	    788746 ns/op	  654403 B/op	   30154 allocs/op
-BenchmarkDataFrameOperations/Statistics-10     	   12099	     97350 ns/op	   79992 B/op	    9999 allocs/op
+BenchmarkDataFrameOperations/Filter-10         	   15675	     77644 ns/op
+BenchmarkDataFrameOperations/Sort-10           	   10000	    102967 ns/op
+BenchmarkDataFrameOperations/GroupBy-10        	    1563	    738085 ns/op
+BenchmarkDataFrameOperations/Statistics-10     	   13000	     92484 ns/op
+BenchmarkChainedOps/Eager-10                   	    1737	    662769 ns/op
+BenchmarkChainedOps/Lazy-10                    	    1875	    622759 ns/op
 PASS
-ok  	github.com/datumbrain/otters	7.016s
+ok  	github.com/datumbrain/otters	9.849s
 ```
 
 ### Basic Usage
