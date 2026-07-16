@@ -1,6 +1,7 @@
 package otters
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -636,4 +637,307 @@ func TestSortStability(t *testing.T) {
 		prevKey = k.(int64)
 		prev = s.(int64)
 	}
+}
+
+// TestGroupByKeyCollision verifies that group values containing the pipe
+// character do not cause key collisions (regression for GroupBy key bug).
+func TestGroupByKeyCollision(t *testing.T) {
+	// "a|b" and "a" with "b" are distinct groups but produced the same "|"-joined key.
+	data := map[string]any{
+		"category": []string{"a|b", "a|b", "a"},
+		"value":    []float64{1, 2, 10},
+	}
+	df, err := NewDataFrameFromMap(data)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	result, err := df.GroupBy("category").Sum()
+	if err != nil {
+		t.Fatalf("GroupBy.Sum failed: %v", err)
+	}
+
+	rows, _ := result.Shape()
+	if rows != 2 {
+		t.Errorf("expected 2 groups, got %d", rows)
+	}
+
+	// Find the "a|b" group and verify its sum is 3, not 13.
+	for i := 0; i < rows; i++ {
+		cat, _ := result.Get(i, "category")
+		val, _ := result.Get(i, "value")
+		if cat.(string) == "a|b" {
+			if val.(float64) != 3 {
+				t.Errorf("group \"a|b\" sum = %v, want 3", val)
+			}
+		}
+		if cat.(string) == "a" {
+			if val.(float64) != 10 {
+				t.Errorf("group \"a\" sum = %v, want 10", val)
+			}
+		}
+	}
+}
+
+// TestDeterministicGroupBy verifies that GroupBy produces rows in the same
+// order across repeated calls.
+func TestDeterministicGroupBy(t *testing.T) {
+	data := map[string]any{
+		"category": []string{"B", "A", "C", "A", "B", "C"},
+		"value":    []float64{10, 20, 30, 40, 50, 60},
+	}
+	df, err := NewDataFrameFromMap(data)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	var orders [][]string
+	for i := 0; i < 10; i++ {
+		result, err := df.GroupBy("category").Sum()
+		if err != nil {
+			t.Fatalf("GroupBy.Sum failed on iteration %d: %v", i, err)
+		}
+		rows, _ := result.Shape()
+		order := make([]string, rows)
+		for r := 0; r < rows; r++ {
+			val, _ := result.Get(r, "category")
+			order[r] = val.(string)
+		}
+		orders = append(orders, order)
+	}
+
+	for i := 1; i < len(orders); i++ {
+		for j, cat := range orders[i] {
+			if cat != orders[0][j] {
+				t.Errorf("non-deterministic GroupBy: iteration %d row %d = %q, want %q",
+					i, j, cat, orders[0][j])
+			}
+		}
+	}
+}
+
+// TestGroupByMinMax covers GroupBy.Min() and GroupBy.Max().
+func TestGroupByMinMax(t *testing.T) {
+	data := map[string]any{
+		"dept":   []string{"Eng", "Eng", "Sales", "Sales"},
+		"salary": []float64{70000, 80000, 50000, 60000},
+	}
+	df, err := NewDataFrameFromMap(data)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	// Min
+	minDf, err := df.GroupBy("dept").Min()
+	if err != nil {
+		t.Fatalf("GroupBy.Min error: %v", err)
+	}
+	rows, _ := minDf.Shape()
+	if rows != 2 {
+		t.Fatalf("GroupBy.Min: expected 2 groups, got %d", rows)
+	}
+	for i := 0; i < rows; i++ {
+		dept, _ := minDf.Get(i, "dept")
+		sal, _ := minDf.Get(i, "salary")
+		switch dept.(string) {
+		case "Eng":
+			if sal.(float64) != 70000 {
+				t.Errorf("Min Eng salary = %v, want 70000", sal)
+			}
+		case "Sales":
+			if sal.(float64) != 50000 {
+				t.Errorf("Min Sales salary = %v, want 50000", sal)
+			}
+		}
+	}
+
+	// Max
+	maxDf, err := df.GroupBy("dept").Max()
+	if err != nil {
+		t.Fatalf("GroupBy.Max error: %v", err)
+	}
+	rows, _ = maxDf.Shape()
+	if rows != 2 {
+		t.Fatalf("GroupBy.Max: expected 2 groups, got %d", rows)
+	}
+	for i := 0; i < rows; i++ {
+		dept, _ := maxDf.Get(i, "dept")
+		sal, _ := maxDf.Get(i, "salary")
+		switch dept.(string) {
+		case "Eng":
+			if sal.(float64) != 80000 {
+				t.Errorf("Max Eng salary = %v, want 80000", sal)
+			}
+		case "Sales":
+			if sal.(float64) != 60000 {
+				t.Errorf("Max Sales salary = %v, want 60000", sal)
+			}
+		}
+	}
+}
+
+// TestOpsOperations covers Drop, SortBy, Unique, Query, Where, and ResetIndex.
+func TestOpsOperations(t *testing.T) {
+	data := map[string]any{
+		"a": []int64{3, 1, 2, 1, 3},
+		"b": []int64{30, 10, 20, 15, 35},
+		"c": []string{"x", "y", "z", "w", "v"},
+	}
+	df, err := NewDataFrameFromMap(data)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	// Drop
+	dfDropped := df.Drop("c")
+	if err := dfDropped.Error(); err != nil {
+		t.Fatalf("Drop error: %v", err)
+	}
+	if dfDropped.HasColumn("c") {
+		t.Error("Drop: column 'c' still present")
+	}
+	_, cols := dfDropped.Shape()
+	if cols != 2 {
+		t.Errorf("Drop: expected 2 columns, got %d", cols)
+	}
+
+	// SortBy
+	sorted := df.SortBy([]string{"a"}, []bool{true})
+	if err := sorted.Error(); err != nil {
+		t.Fatalf("SortBy error: %v", err)
+	}
+	first, _ := sorted.Get(0, "a")
+	if first.(int64) != 1 {
+		t.Errorf("SortBy ascending: first 'a' value = %v, want 1", first)
+	}
+
+	// Unique
+	unique, err := df.Unique("a")
+	if err != nil {
+		t.Fatalf("Unique error: %v", err)
+	}
+	if len(unique) != 3 {
+		t.Errorf("Unique: got %d values, want 3", len(unique))
+	}
+
+	// Query
+	queried := df.Query("a > 2")
+	if err := queried.Error(); err != nil {
+		t.Fatalf("Query error: %v", err)
+	}
+	qRows, _ := queried.Shape()
+	if qRows != 2 {
+		t.Errorf("Query 'a > 2': got %d rows, want 2", qRows)
+	}
+
+	// Where (alias for Filter)
+	where := df.Where("a", ">", int64(2))
+	if err := where.Error(); err != nil {
+		t.Fatalf("Where error: %v", err)
+	}
+	wRows, _ := where.Shape()
+	if wRows != 2 {
+		t.Errorf("Where 'a > 2': got %d rows, want 2", wRows)
+	}
+
+	// ResetIndex
+	reset := df.ResetIndex()
+	if err := reset.Error(); err != nil {
+		t.Fatalf("ResetIndex error: %v", err)
+	}
+	rRows, rCols := reset.Shape()
+	dfRows, dfCols := df.Shape()
+	if rRows != dfRows || rCols != dfCols {
+		t.Errorf("ResetIndex: shape changed: got (%d, %d), want (%d, %d)",
+			rRows, rCols, dfRows, dfCols)
+	}
+}
+
+// TestStringOperators covers Filter with "contains", "startswith", and "endswith".
+func TestStringOperators(t *testing.T) {
+	data := map[string]any{
+		"name": []string{"Alice", "Bob", "Albany", "Sara"},
+	}
+	df, err := NewDataFrameFromMap(data)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	// contains
+	filtered := df.Filter("name", "contains", "l")
+	if err := filtered.Error(); err != nil {
+		t.Fatalf("Filter contains error: %v", err)
+	}
+	rows, _ := filtered.Shape()
+	if rows != 2 { // Alice, Albany
+		t.Errorf("Filter contains 'l': got %d rows, want 2", rows)
+	}
+
+	// startswith
+	starts := df.Filter("name", "startswith", "Al")
+	if err := starts.Error(); err != nil {
+		t.Fatalf("Filter startswith error: %v", err)
+	}
+	rows, _ = starts.Shape()
+	if rows != 2 { // Alice, Albany
+		t.Errorf("Filter startswith 'Al': got %d rows, want 2", rows)
+	}
+
+	// endswith
+	ends := df.Filter("name", "endswith", "e")
+	if err := ends.Error(); err != nil {
+		t.Fatalf("Filter endswith error: %v", err)
+	}
+	rows, _ = ends.Shape()
+	if rows != 1 { // Alice
+		t.Errorf("Filter endswith 'e': got %d rows, want 1", rows)
+	}
+}
+
+// Benchmark basic operations
+func BenchmarkDataFrameOperations(b *testing.B) {
+	// Create test data
+	size := 10000
+	data := map[string]any{
+		"id":     make([]int64, size),
+		"value":  make([]float64, size),
+		"status": make([]string, size),
+	}
+
+	for i := 0; i < size; i++ {
+		data["id"].([]int64)[i] = int64(i)
+		data["value"].([]float64)[i] = float64(i) * 2.5
+		data["status"].([]string)[i] = fmt.Sprintf("status_%d", i%10)
+	}
+
+	df, err := NewDataFrameFromMap(data)
+	if err != nil {
+		b.Fatalf("Failed to create DataFrame: %v", err)
+	}
+
+	b.ResetTimer()
+
+	b.Run("Filter", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			_ = df.Filter("value", ">", 5000.0)
+		}
+	})
+
+	b.Run("Sort", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			_ = df.Sort("value", false)
+		}
+	})
+
+	b.Run("GroupBy", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			_, _ = df.GroupBy("status").Sum()
+		}
+	})
+
+	b.Run("Statistics", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			_, _ = df.Mean("value")
+		}
+	})
 }

@@ -2,6 +2,7 @@ package otters
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -149,4 +150,78 @@ func TestSafeOperation(t *testing.T) {
 	if err == nil {
 		t.Error("SafeOperation should return error")
 	}
+}
+
+// TestErrorHandling covers error propagation through chained operations.
+func TestErrorHandling(t *testing.T) {
+	df := NewDataFrame()
+
+	// Test operations on empty DataFrame
+	result := df.Filter("nonexistent", "==", "value")
+	if result.Error() == nil {
+		t.Error("Expected error when filtering nonexistent column")
+	}
+
+	// Test chaining with errors
+	chained := df.Filter("bad", "==", 1).Sort("bad", true).Head(5)
+	if chained.Error() == nil {
+		t.Error("Expected error to propagate through chain")
+	}
+}
+
+// TestSentinelErrors covers sentinel errors, SafeOperation, and MustOperation.
+func TestSentinelErrors(t *testing.T) {
+	// Each sentinel error must be non-nil
+	sentinels := map[string]error{
+		"ErrColumnNotFound":   ErrColumnNotFound,
+		"ErrIndexOutOfRange":  ErrIndexOutOfRange,
+		"ErrTypeMismatch":     ErrTypeMismatch,
+		"ErrEmptyDataFrame":   ErrEmptyDataFrame,
+		"ErrInvalidOperation": ErrInvalidOperation,
+	}
+	for name, sentinel := range sentinels {
+		if sentinel == nil {
+			t.Errorf("%s is nil", name)
+		}
+	}
+
+	// SafeOperation: wraps error returned by function
+	err := SafeOperation("test", func() error {
+		return fmt.Errorf("something went wrong")
+	})
+	if err == nil {
+		t.Error("SafeOperation: expected error from function, got nil")
+	}
+
+	// SafeOperation: successful function returns nil
+	err = SafeOperation("test", func() error {
+		return nil
+	})
+	if err != nil {
+		t.Errorf("SafeOperation: expected nil error for success, got %v", err)
+	}
+
+	// MustOperation: must panic on error
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("MustOperation: expected panic on error, got none")
+			}
+		}()
+		MustOperation("test", func() error {
+			return fmt.Errorf("forced error")
+		})
+	}()
+
+	// MustOperation: must not panic on success
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Errorf("MustOperation: unexpected panic on success: %v", r)
+			}
+		}()
+		MustOperation("test", func() error {
+			return nil
+		})
+	}()
 }

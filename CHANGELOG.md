@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [1.0.8] — 2026-07-16
+
+### Documentation
+
+- **README brought in line with reality** — the feature list, usage examples, and roadmap now reflect what the library actually ships (including the JSONL I/O added in 1.0.7); stale roadmap items and unimplemented feature claims were removed.
+
+### Internal
+
+- **Test suite reorganized by topic** — the monolithic `example_test.go` (which mixed godoc examples, regular tests, and a benchmark) was split up. Godoc examples now live in per-topic files (`example_df_test.go`, `example_ops_test.go`, `example_stats_test.go`, `example_csv_test.go`, `example_workflow_test.go`), and the regular tests and `BenchmarkDataFrameOperations` moved into the existing matching test files (`df_test.go`, `csv_test.go`, `ops_test.go`, `stats_test.go`, `err_test.go`). No test logic changed — code was only relocated.
+
+---
+
 ## [1.0.7] — 2026-07-16
 
 ### Added

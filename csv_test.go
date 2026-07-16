@@ -1,6 +1,7 @@
 package otters
 
 import (
+	"math"
 	"os"
 	"testing"
 	"time"
@@ -554,5 +555,166 @@ func TestCSVZeroOneColumnRoundTrip(t *testing.T) {
 	want := "id,flag\n10,0\n20,1\n30,0\n"
 	if string(data) != want {
 		t.Errorf("round-trip changed the data:\n got: %q\nwant: %q", string(data), want)
+	}
+}
+
+// TestCSVOperations covers CSV parsing with automatic type inference.
+func TestCSVOperations(t *testing.T) {
+	csvData := `name,age,score
+Alice,25,95.5
+Bob,30,87.2
+Carol,28,92.1`
+
+	df, err := ReadCSVFromString(csvData)
+	if err != nil {
+		t.Fatalf("Failed to read CSV: %v", err)
+	}
+
+	// Test automatic type inference
+	ageType, err := df.GetColumnType("age")
+	if err != nil {
+		t.Fatalf("Failed to get column type: %v", err)
+	}
+	if ageType != Int64Type {
+		t.Errorf("Expected Int64Type for age, got %v", ageType)
+	}
+
+	scoreType, err := df.GetColumnType("score")
+	if err != nil {
+		t.Fatalf("Failed to get column type: %v", err)
+	}
+	if scoreType != Float64Type {
+		t.Errorf("Expected Float64Type for score, got %v", scoreType)
+	}
+
+	// Test statistics with proper floating point comparison
+	avgScore, err := df.Mean("score")
+	if err != nil {
+		t.Fatalf("Failed to calculate mean: %v", err)
+	}
+
+	expectedAvg := (95.5 + 87.2 + 92.1) / 3
+	// Use tolerance for floating point comparison
+	tolerance := 0.001
+	if math.Abs(avgScore-expectedAvg) > tolerance {
+		t.Errorf("Expected average %.6f, got %.6f", expectedAvg, avgScore)
+	}
+}
+
+// TestCSVFileOperations covers file-based CSV I/O using os.CreateTemp.
+func TestCSVFileOperations(t *testing.T) {
+	data := map[string]any{
+		"id":   []int64{1, 2, 3},
+		"name": []string{"Alice", "Bob", "Carol"},
+		"age":  []int64{25, 30, 35},
+	}
+	df, err := NewDataFrameFromMap(data)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	// WriteCSV + ReadCSV roundtrip
+	tmpCSV, err := os.CreateTemp("", "otter_test_*.csv")
+	if err != nil {
+		t.Fatalf("CreateTemp error: %v", err)
+	}
+	tmpCSV.Close()
+	defer os.Remove(tmpCSV.Name())
+
+	if err := df.WriteCSV(tmpCSV.Name()); err != nil {
+		t.Fatalf("WriteCSV error: %v", err)
+	}
+	df2, err := ReadCSV(tmpCSV.Name())
+	if err != nil {
+		t.Fatalf("ReadCSV error: %v", err)
+	}
+	rows, cols := df2.Shape()
+	if rows != 3 || cols != 3 {
+		t.Errorf("ReadCSV roundtrip: got shape (%d, %d), want (3, 3)", rows, cols)
+	}
+
+	// WriteCSVWithOptions + ReadCSVWithOptions with tab delimiter
+	tmpTSV, err := os.CreateTemp("", "otter_test_*.tsv")
+	if err != nil {
+		t.Fatalf("CreateTemp error: %v", err)
+	}
+	tmpTSV.Close()
+	defer os.Remove(tmpTSV.Name())
+
+	if err := df.WriteCSVWithOptions(tmpTSV.Name(), CSVOptions{HasHeader: true, Delimiter: '\t'}); err != nil {
+		t.Fatalf("WriteCSVWithOptions error: %v", err)
+	}
+	df3, err := ReadCSVWithOptions(tmpTSV.Name(), CSVOptions{HasHeader: true, Delimiter: '\t'})
+	if err != nil {
+		t.Fatalf("ReadCSVWithOptions error: %v", err)
+	}
+	rows, cols = df3.Shape()
+	if rows != 3 || cols != 3 {
+		t.Errorf("ReadCSVWithOptions tab roundtrip: got shape (%d, %d), want (3, 3)", rows, cols)
+	}
+
+	// DetectDelimiter on tab-delimited file
+	delim, err := DetectDelimiter(tmpTSV.Name())
+	if err != nil {
+		t.Fatalf("DetectDelimiter error: %v", err)
+	}
+	if delim != '\t' {
+		t.Errorf("DetectDelimiter: got %q, want tab", string(delim))
+	}
+
+	// ValidateCSV on valid file
+	info, err := ValidateCSV(tmpCSV.Name())
+	if err != nil {
+		t.Fatalf("ValidateCSV error: %v", err)
+	}
+	if info == nil {
+		t.Fatal("ValidateCSV returned nil info")
+	}
+
+	// ValidateCSV on invalid file (inconsistent column counts)
+	tmpInvalid, err := os.CreateTemp("", "otter_invalid_*.csv")
+	if err != nil {
+		t.Fatalf("CreateTemp error: %v", err)
+	}
+	_, _ = tmpInvalid.WriteString("col1,col2\n1,2\n3,4,5\n")
+	tmpInvalid.Close()
+	defer os.Remove(tmpInvalid.Name())
+	_, err = ValidateCSV(tmpInvalid.Name())
+	if err == nil {
+		t.Error("ValidateCSV: expected error for inconsistent columns, got nil")
+	}
+
+	// Headerless CSV
+	tmpNoHeader, err := os.CreateTemp("", "otter_noheader_*.csv")
+	if err != nil {
+		t.Fatalf("CreateTemp error: %v", err)
+	}
+	_, _ = tmpNoHeader.WriteString("1,Alice\n2,Bob\n")
+	tmpNoHeader.Close()
+	defer os.Remove(tmpNoHeader.Name())
+	dfNoHeader, err := ReadCSVWithOptions(tmpNoHeader.Name(), CSVOptions{HasHeader: false, Delimiter: ','})
+	if err != nil {
+		t.Fatalf("ReadCSVWithOptions headerless error: %v", err)
+	}
+	nhRows, nhCols := dfNoHeader.Shape()
+	if nhRows != 2 || nhCols != 2 {
+		t.Errorf("Headerless CSV: got shape (%d, %d), want (2, 2)", nhRows, nhCols)
+	}
+
+	// MaxRows option
+	tmpMaxRows, err := os.CreateTemp("", "otter_maxrows_*.csv")
+	if err != nil {
+		t.Fatalf("CreateTemp error: %v", err)
+	}
+	_, _ = tmpMaxRows.WriteString("id,name\n1,Alice\n2,Bob\n3,Carol\n4,Dave\n")
+	tmpMaxRows.Close()
+	defer os.Remove(tmpMaxRows.Name())
+	dfMax, err := ReadCSVWithOptions(tmpMaxRows.Name(), CSVOptions{HasHeader: true, Delimiter: ',', MaxRows: 2})
+	if err != nil {
+		t.Fatalf("ReadCSVWithOptions MaxRows error: %v", err)
+	}
+	maxRows, _ := dfMax.Shape()
+	if maxRows != 2 {
+		t.Errorf("MaxRows: got %d rows, want 2", maxRows)
 	}
 }

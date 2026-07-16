@@ -320,3 +320,97 @@ func TestValueCountsOnColumnNamedCount(t *testing.T) {
 		t.Errorf("ValueCounts result has %d columns, want 2 (values + counts)", cols)
 	}
 }
+
+// TestStatsOperations covers Median, Var, Quantile, Describe, ValueCounts,
+// Correlation, and NumericSummary.
+func TestStatsOperations(t *testing.T) {
+	data := map[string]any{
+		"value":    []float64{10, 20, 30, 40, 50},
+		"category": []string{"a", "b", "a", "b", "a"},
+		"x":        []float64{1, 2, 3, 4, 5},
+	}
+	df, err := NewDataFrameFromMap(data)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	// Median
+	median, err := df.Median("value")
+	if err != nil {
+		t.Fatalf("Median error: %v", err)
+	}
+	if median != 30 {
+		t.Errorf("Median = %v, want 30", median)
+	}
+
+	// Var
+	variance, err := df.Var("value")
+	if err != nil {
+		t.Fatalf("Var error: %v", err)
+	}
+	if variance <= 0 {
+		t.Errorf("Var = %v, want > 0", variance)
+	}
+
+	// Quantile
+	q25, err := df.Quantile("value", 0.25)
+	if err != nil {
+		t.Fatalf("Quantile error: %v", err)
+	}
+	if q25 <= 0 {
+		t.Errorf("Quantile(0.25) = %v, want > 0", q25)
+	}
+
+	// Describe
+	desc, err := df.Describe()
+	if err != nil {
+		t.Fatalf("Describe error: %v", err)
+	}
+	if desc == nil {
+		t.Fatal("Describe returned nil")
+	}
+	descRows, _ := desc.Shape()
+	if descRows == 0 {
+		t.Error("Describe: expected non-empty result")
+	}
+
+	// ValueCounts
+	vc, err := df.ValueCounts("category")
+	if err != nil {
+		t.Fatalf("ValueCounts error: %v", err)
+	}
+	if vc == nil {
+		t.Fatal("ValueCounts returned nil")
+	}
+	vcRows, _ := vc.Shape()
+	if vcRows != 2 { // "a" and "b"
+		t.Errorf("ValueCounts: got %d rows, want 2", vcRows)
+	}
+
+	// Correlation (needs >= 2 numeric columns)
+	corr, err := df.Correlation()
+	if err != nil {
+		t.Fatalf("Correlation error: %v", err)
+	}
+	if corr == nil {
+		t.Fatal("Correlation returned nil")
+	}
+
+	// NumericSummary
+	ns, err := df.NumericSummary("value")
+	if err != nil {
+		t.Fatalf("NumericSummary error: %v", err)
+	}
+	if ns == nil {
+		t.Fatal("NumericSummary returned nil")
+	}
+	if ns.Mean != 30 {
+		t.Errorf("NumericSummary.Mean = %v, want 30", ns.Mean)
+	}
+	if ns.Min != 10 {
+		t.Errorf("NumericSummary.Min = %v, want 10", ns.Min)
+	}
+	if ns.Max != 50 {
+		t.Errorf("NumericSummary.Max = %v, want 50", ns.Max)
+	}
+}

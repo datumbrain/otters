@@ -683,3 +683,226 @@ func TestDataFrameDoesNotAliasCallerSlice(t *testing.T) {
 		t.Errorf("mutating the source slice changed the DataFrame: got %v, want 1", v)
 	}
 }
+
+// TestDataFrameBasics covers basic DataFrame creation and operations.
+func TestDataFrameBasics(t *testing.T) {
+	data := map[string]any{
+		"numbers": []int64{1, 2, 3, 4, 5},
+		"names":   []string{"a", "b", "c", "d", "e"},
+	}
+
+	df, err := NewDataFrameFromMap(data)
+	if err != nil {
+		t.Fatalf("Failed to create DataFrame: %v", err)
+	}
+
+	// Test shape
+	rows, cols := df.Shape()
+	if rows != 5 || cols != 2 {
+		t.Errorf("Expected shape (5, 2), got (%d, %d)", rows, cols)
+	}
+
+	// Test columns
+	columns := df.Columns()
+	if len(columns) != 2 {
+		t.Errorf("Expected 2 columns, got %d", len(columns))
+	}
+
+	// Test filtering
+	filtered := df.Filter("numbers", ">", int64(3))
+	if err := filtered.Error(); err != nil {
+		t.Errorf("Filter error: %v", err)
+	}
+
+	filteredRows, _ := filtered.Shape()
+	if filteredRows != 2 {
+		t.Errorf("Expected 2 filtered rows, got %d", filteredRows)
+	}
+}
+
+// TestTimeTypeHeadTail verifies that Head and Tail work on DataFrames with
+// TimeType columns (regression for missing TimeType case in slice()).
+func TestTimeTypeHeadTail(t *testing.T) {
+	t1, _ := time.Parse("2006-01-02", "2024-01-01")
+	t2, _ := time.Parse("2006-01-02", "2024-01-02")
+	t3, _ := time.Parse("2006-01-02", "2024-01-03")
+
+	s, err := NewSeries("date", []time.Time{t1, t2, t3})
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	df, err := NewDataFrameFromSeries(s)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	head := df.Head(2)
+	if head.Error() != nil {
+		t.Fatalf("Head on TimeType column failed: %v", head.Error())
+	}
+	if rows, _ := head.Shape(); rows != 2 {
+		t.Errorf("Head(2) returned %d rows, want 2", rows)
+	}
+
+	tail := df.Tail(1)
+	if tail.Error() != nil {
+		t.Fatalf("Tail on TimeType column failed: %v", tail.Error())
+	}
+	if rows, _ := tail.Shape(); rows != 1 {
+		t.Errorf("Tail(1) returned %d rows, want 1", rows)
+	}
+
+	// Verify the value is correct
+	val, err := tail.Get(0, "date")
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if !val.(time.Time).Equal(t3) {
+		t.Errorf("Tail value = %v, want %v", val, t3)
+	}
+}
+
+// TestSetErrorDoesNotMutateCaller verifies that a failed operation does not
+// corrupt the original DataFrame (regression for the setError mutation bug).
+func TestSetErrorDoesNotMutateCaller(t *testing.T) {
+	data := map[string]any{
+		"a": []int64{1, 2, 3},
+	}
+	df, err := NewDataFrameFromMap(data)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	_ = df.Filter("nonexistent", "==", int64(1))
+
+	if df.Error() != nil {
+		t.Errorf("Filter on nonexistent column mutated the original DataFrame: %v", df.Error())
+	}
+
+	rows, cols := df.Shape()
+	if rows != 3 || cols != 1 {
+		t.Errorf("original DataFrame shape changed after failed Filter: got (%d, %d), want (3, 1)", rows, cols)
+	}
+}
+
+// TestDeterministicFromMap verifies that NewDataFrameFromMap always produces
+// columns in alphabetical order, regardless of map iteration order.
+func TestDeterministicFromMap(t *testing.T) {
+	data := map[string]any{
+		"zebra": []int64{1, 2, 3},
+		"apple": []int64{4, 5, 6},
+		"mango": []int64{7, 8, 9},
+	}
+	expected := []string{"apple", "mango", "zebra"}
+	for i := 0; i < 20; i++ {
+		df, err := NewDataFrameFromMap(data)
+		if err != nil {
+			t.Fatalf("NewDataFrameFromMap failed on iteration %d: %v", i, err)
+		}
+		cols := df.Columns()
+		if len(cols) != len(expected) {
+			t.Fatalf("iteration %d: expected %d columns, got %d", i, len(expected), len(cols))
+		}
+		for j, col := range cols {
+			if col != expected[j] {
+				t.Errorf("iteration %d: column[%d] = %q, want %q", i, j, col, expected[j])
+			}
+		}
+	}
+}
+
+// TestDataFrameManipulation covers Tail, Set, GetSeries, AddColumn, DropColumn,
+// RenameColumn, IsEmpty, and HasColumn.
+func TestDataFrameManipulation(t *testing.T) {
+	data := map[string]any{
+		"id":   []int64{1, 2, 3, 4, 5},
+		"name": []string{"a", "b", "c", "d", "e"},
+	}
+	df, err := NewDataFrameFromMap(data)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	// Tail
+	tail := df.Tail(2)
+	if err := tail.Error(); err != nil {
+		t.Fatalf("Tail error: %v", err)
+	}
+	rows, _ := tail.Shape()
+	if rows != 2 {
+		t.Errorf("Tail(2) returned %d rows, want 2", rows)
+	}
+
+	// Set
+	if err := df.Set(0, "id", int64(99)); err != nil {
+		t.Fatalf("Set error: %v", err)
+	}
+	val, err := df.Get(0, "id")
+	if err != nil {
+		t.Fatalf("Get after Set error: %v", err)
+	}
+	if val.(int64) != 99 {
+		t.Errorf("Set: got %v, want 99", val)
+	}
+
+	// GetSeries
+	s, err := df.GetSeries("id")
+	if err != nil {
+		t.Fatalf("GetSeries error: %v", err)
+	}
+	if s == nil || s.Name != "id" {
+		t.Errorf("GetSeries returned unexpected series: %v", s)
+	}
+
+	// AddColumn (mutates df in place)
+	scoreSeries, err := NewSeries("score", []float64{10.0, 20.0, 30.0, 40.0, 50.0})
+	if err != nil {
+		t.Fatalf("NewSeries error: %v", err)
+	}
+	df.AddColumn(scoreSeries)
+	if !df.HasColumn("score") {
+		t.Error("AddColumn: 'score' column not found")
+	}
+
+	// DropColumn (returns copy)
+	dfDropped := df.DropColumn("score")
+	if err := dfDropped.Error(); err != nil {
+		t.Fatalf("DropColumn error: %v", err)
+	}
+	if dfDropped.HasColumn("score") {
+		t.Error("DropColumn: 'score' still present in returned DataFrame")
+	}
+	if !df.HasColumn("score") {
+		t.Error("DropColumn: 'score' removed from original DataFrame unexpectedly")
+	}
+
+	// RenameColumn (returns copy)
+	dfRenamed := df.RenameColumn("id", "user_id")
+	if err := dfRenamed.Error(); err != nil {
+		t.Fatalf("RenameColumn error: %v", err)
+	}
+	if !dfRenamed.HasColumn("user_id") {
+		t.Error("RenameColumn: 'user_id' not found in result")
+	}
+	if dfRenamed.HasColumn("id") {
+		t.Error("RenameColumn: old 'id' still present in result")
+	}
+
+	// IsEmpty
+	empty := NewDataFrame()
+	if !empty.IsEmpty() {
+		t.Error("IsEmpty: expected true for new empty DataFrame")
+	}
+	if df.IsEmpty() {
+		t.Error("IsEmpty: expected false for non-empty DataFrame")
+	}
+
+	// HasColumn
+	if !df.HasColumn("name") {
+		t.Error("HasColumn: 'name' should exist")
+	}
+	if df.HasColumn("nonexistent") {
+		t.Error("HasColumn: 'nonexistent' should not exist")
+	}
+}
