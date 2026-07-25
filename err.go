@@ -223,28 +223,34 @@ func (df *DataFrame) Error() error {
 	return df.err
 }
 
-// recoverFromPanic recovers from panics and converts them to OtterErrors
-func recoverFromPanic(op string) error {
-	if r := recover(); r != nil {
-		switch v := r.(type) {
-		case error:
-			return wrapError(op, v)
-		case string:
-			return newOpError(op, v)
-		default:
-			return newOpError(op, fmt.Sprintf("panic: %v", r))
-		}
+// panicToError converts a recovered panic value into an OtterError.
+func panicToError(op string, r any) error {
+	switch v := r.(type) {
+	case error:
+		return wrapError(op, v)
+	case string:
+		return newOpError(op, v)
+	default:
+		return newOpError(op, fmt.Sprintf("panic: %v", r))
 	}
-	return nil
+}
+
+// recoverFromPanic converts an in-flight panic into an error assigned to
+// *errp. It must be installed directly as the deferred function:
+//
+//	defer recoverFromPanic("Op", &err)
+//
+// Calling it from inside another deferred closure does not work: recover
+// only intercepts a panic when called directly by a deferred function.
+func recoverFromPanic(op string, errp *error) {
+	if r := recover(); r != nil {
+		*errp = panicToError(op, r)
+	}
 }
 
 // SafeOperation wraps a function to handle panics and convert them to errors
 func SafeOperation(op string, fn func() error) (err error) {
-	defer func() {
-		if panicErr := recoverFromPanic(op); panicErr != nil {
-			err = panicErr
-		}
-	}()
+	defer recoverFromPanic(op, &err)
 	return fn()
 }
 

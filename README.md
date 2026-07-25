@@ -134,6 +134,34 @@ ranked := df.SortBy(
 )
 ```
 
+### Joining DataFrames
+
+```go
+// Combine two frames on a shared key column
+result := orders.Join(customers, []string{"customer_id"}, otters.InnerJoin)
+
+// All four join types: InnerJoin, LeftJoin, RightJoin, OuterJoin
+all := orders.Join(customers, []string{"customer_id"}, otters.LeftJoin)
+
+// Keys named differently in each frame
+res := employees.JoinOn(departments, []string{"dept_code"}, []string{"code"}, otters.InnerJoin)
+
+// Composite keys join on the tuple of all key columns
+byRegionYear := sales.Join(targets, []string{"region", "year"}, otters.InnerJoin)
+```
+
+Join semantics worth knowing:
+
+- Key columns appear **once** in the output (under the left frame's name). Non-key
+  columns present in both frames are suffixed `_left` / `_right`.
+- An `int64` key can join a `float64` key — matching happens in float64 space and
+  the output key column is promoted to `float64`. Any other type mismatch errors.
+- A key equal to its type's zero value (`""`, `0`, `0.0`, `false`, zero time) is
+  treated as **missing** and never matches — consistent with how CSV/JSONL fill
+  missing cells. Unmatched sides are zero-filled the same way.
+- Output order is deterministic: left-frame row order, then (for right/outer)
+  unmatched right rows in right-frame order.
+
 ### Aggregations and Statistics
 
 ```go
@@ -157,9 +185,22 @@ fmt.Println(summary)
 ### Data Transformation
 
 ```go
-// Create new columns
-df_with_bonus := df.Copy()
-// Add 10% bonus calculation (implementation coming soon)
+// Derive a column from the whole row
+withBonus := df.Apply("bonus", func(row map[string]any) any {
+    return row["salary"].(float64) * 0.10
+})
+
+// Element-wise transform of a single column (newColumn == srcColumn replaces it)
+upper := df.Map("name", "name_upper", func(v any) any {
+    return strings.ToUpper(v.(string))
+})
+
+// Missing-value handling. Otters has no explicit null: the column type's
+// zero value ("", 0, 0.0, false, zero time) is the missing-value sentinel,
+// so a legitimate 0 in an int column is indistinguishable from missing.
+filled := df.FillNA("department", "Unassigned") // replace zero values
+complete := df.DropNA("salary", "department")   // drop rows with zero values
+allComplete := df.DropNA()                      // check every column
 
 // Rename columns
 clean_df := df.RenameColumn("hired_date", "start_date")
@@ -167,6 +208,13 @@ clean_df := df.RenameColumn("hired_date", "start_date")
 // Drop columns
 essential := df.Drop("internal_id", "notes")
 ```
+
+The derived column's type is inferred from what the function returns: all
+integers → `int64`, integer/float mix → `float64`, uniform string/bool/time
+keep their type, any other mix falls back to `string`. Returning `nil` fills
+that row with the zero value. A panic inside your function is caught and
+carried as an error on the returned DataFrame — it will not crash your
+program.
 
 ## 🏗️ API Reference
 
@@ -297,6 +345,7 @@ Coming from Pandas? Here's how Otters compares:
 | `df[df.age > 25]`     | `df.Filter("age", ">", 25)` | Explicit syntax          |
 | `df[['name', 'age']]` | `df.Select("name", "age")`  | Method-based selection   |
 | `df.sort_values()`    | `df.Sort("column", true)`   | Simple sort syntax       |
+| `df.merge(other)`     | `df.Join(other, keys, how)` | Explicit join type       |
 | `df.describe()`       | `df.Describe()`             | Similar functionality    |
 
 ## 🚧 Roadmap
@@ -311,11 +360,12 @@ Coming from Pandas? Here's how Otters compares:
 - [x] Simple query strings (`Query("age > 25")`) and `Where`
 - [x] Statistics (describe, median, variance, quantiles, correlation, value counts)
 - [x] Lazy views for chained operations (`df.Lazy()...Collect()`)
+- [x] Join operations (inner, left, right, outer) — `Join` / `JoinOn`
+- [x] Column derivation & transforms — `Apply`, `Map`, `FillNA`, `DropNA`
 - [x] Fluent API with error handling
 
 ### 🔄 Coming Soon
 
-- [ ] Join operations (inner, left, right, outer)
 - [ ] More file formats (JSON arrays, Parquet)
 - [ ] Data visualization helpers
 - [ ] Streaming operations for large files

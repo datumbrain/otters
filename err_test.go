@@ -129,10 +129,26 @@ func TestDataFrame_ErrorMethods(t *testing.T) {
 }
 
 func TestRecoverFromPanic(t *testing.T) {
-	// Test that recoverFromPanic works when there's no panic
-	err := recoverFromPanic("TestOp")
-	if err != nil {
-		t.Error("recoverFromPanic should return nil when no panic")
+	// No-panic path: the error must stay untouched.
+	run := func() (err error) {
+		defer recoverFromPanic("TestOp", &err)
+		return nil
+	}
+	if err := run(); err != nil {
+		t.Error("recoverFromPanic should leave err nil when no panic occurred")
+	}
+
+	// Panic path: err is populated with an OtterError.
+	boom := func() (err error) {
+		defer recoverFromPanic("TestOp", &err)
+		panic("kaboom")
+	}
+	err := boom()
+	if err == nil {
+		t.Fatal("recoverFromPanic should convert the panic into an error")
+	}
+	if !strings.Contains(err.Error(), "kaboom") {
+		t.Errorf("recovered error should carry the panic message, got: %v", err)
 	}
 }
 
@@ -224,4 +240,69 @@ func TestSentinelErrors(t *testing.T) {
 			return nil
 		})
 	}()
+}
+
+// TestSafeOperationRecoversPanics is the core "no panics escape" guarantee:
+// a panic inside the wrapped function must come back as an error, not crash.
+func TestSafeOperationRecoversPanics(t *testing.T) {
+	// String panic.
+	err := SafeOperation("StringPanic", func() error { panic("exploded") })
+	if err == nil {
+		t.Fatal("SafeOperation must convert a string panic into an error")
+	}
+	if !strings.Contains(err.Error(), "exploded") {
+		t.Errorf("recovered error should mention the panic message, got: %v", err)
+	}
+	var oe *OtterError
+	if !errors.As(err, &oe) || oe.Op != "StringPanic" {
+		t.Errorf("recovered error should be an *OtterError carrying the op, got: %#v", err)
+	}
+
+	// Error panic: the original error must remain reachable via errors.Is.
+	cause := errors.New("root cause")
+	err = SafeOperation("ErrorPanic", func() error { panic(cause) })
+	if err == nil {
+		t.Fatal("SafeOperation must convert an error panic into an error")
+	}
+	if !errors.Is(err, cause) {
+		t.Errorf("recovered error should wrap the panicked error, got: %v", err)
+	}
+
+	// Arbitrary value panic.
+	err = SafeOperation("IntPanic", func() error { panic(42) })
+	if err == nil {
+		t.Fatal("SafeOperation must convert a non-error panic into an error")
+	}
+	if !strings.Contains(err.Error(), "42") {
+		t.Errorf("recovered error should mention the panic value, got: %v", err)
+	}
+}
+
+// TestSafeOperationRecoversRuntimePanic drives a genuine runtime panic
+// (index out of range) through the safety net.
+func TestSafeOperationRecoversRuntimePanic(t *testing.T) {
+	err := SafeOperation("Runtime", func() error {
+		s := make([]int, 0)
+		i := len(s) - 1
+		_ = s[i] // index out of range at runtime
+		return nil
+	})
+	if err == nil {
+		t.Fatal("SafeOperation must recover a runtime panic")
+	}
+	if !strings.Contains(err.Error(), "range") {
+		t.Errorf("recovered error should carry the runtime message, got: %v", err)
+	}
+}
+
+// TestSentinelMatchingSurvivesRecoveredPath guards the Round-2 sentinel fix:
+// errors produced after a recovery still match via errors.Is.
+func TestSentinelMatchingSurvivesRecoveredPath(t *testing.T) {
+	df, _ := NewDataFrameFromMap(map[string]any{"a": []int64{1}})
+	err := SafeOperation("Wrapped", func() error {
+		return df.validateColumnExists("ghost")
+	})
+	if !errors.Is(err, ErrColumnNotFound) {
+		t.Errorf("sentinel matching lost through SafeOperation, got: %v", err)
+	}
 }

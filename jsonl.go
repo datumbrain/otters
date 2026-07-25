@@ -105,7 +105,7 @@ func readJSONL(r io.Reader, options JSONLOptions, operation string) (*DataFrame,
 		return nil, wrapError(operation, err)
 	}
 
-	return buildDataFrameFromJSONLRows(order, rows, operation)
+	return buildDataFrameFromObjects(order, rows, operation)
 }
 
 // decodeJSONLine decodes one JSONL line into a value map plus the object's
@@ -114,12 +114,28 @@ func decodeJSONLine(line string) (map[string]any, []string, error) {
 	dec := json.NewDecoder(strings.NewReader(line))
 	dec.UseNumber()
 
+	obj, keys, err := decodeJSONObject(dec)
+	if err != nil {
+		return nil, nil, err
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return nil, nil, fmt.Errorf("unexpected data after JSON object")
+	}
+
+	return obj, keys, nil
+}
+
+// decodeJSONObject decodes the next value from dec, which must be a JSON
+// object, returning the value map plus the keys in order of appearance.
+// Shared by the JSONL (one object per line) and JSON (array of objects)
+// readers.
+func decodeJSONObject(dec *json.Decoder) (map[string]any, []string, error) {
 	tok, err := dec.Token()
 	if err != nil {
 		return nil, nil, err
 	}
 	if delim, ok := tok.(json.Delim); !ok || delim != '{' {
-		return nil, nil, fmt.Errorf("line is not a JSON object")
+		return nil, nil, fmt.Errorf("value is not a JSON object")
 	}
 
 	obj := make(map[string]any)
@@ -144,15 +160,13 @@ func decodeJSONLine(line string) (map[string]any, []string, error) {
 	if _, err := dec.Token(); err != nil { // consume closing '}'
 		return nil, nil, err
 	}
-	if _, err := dec.Token(); err != io.EOF {
-		return nil, nil, fmt.Errorf("unexpected data after JSON object")
-	}
 
 	return obj, keys, nil
 }
 
-// buildDataFrameFromJSONLRows constructs a DataFrame from decoded JSONL rows
-func buildDataFrameFromJSONLRows(order []string, rows []map[string]any, operation string) (*DataFrame, error) {
+// buildDataFrameFromObjects constructs a DataFrame from decoded JSON objects
+// (one per row). Shared by the JSONL and JSON-array readers.
+func buildDataFrameFromObjects(order []string, rows []map[string]any, operation string) (*DataFrame, error) {
 	if len(order) == 0 {
 		return NewDataFrame(), nil
 	}
@@ -164,8 +178,8 @@ func buildDataFrameFromJSONLRows(order []string, rows []map[string]any, operatio
 			values[i] = row[name] // missing key yields nil, same as JSON null
 		}
 
-		colType := inferJSONLColumnType(values)
-		s, err := buildJSONLSeries(name, values, colType)
+		colType := inferJSONColumnType(values)
+		s, err := buildJSONSeries(name, values, colType)
 		if err != nil {
 			return nil, wrapColumnError(operation, name, err)
 		}
@@ -175,11 +189,11 @@ func buildDataFrameFromJSONLRows(order []string, rows []map[string]any, operatio
 	return NewDataFrameFromSeries(series...)
 }
 
-// inferJSONLColumnType picks a column type from decoded JSON values.
+// inferJSONColumnType picks a column type from decoded JSON values.
 // Unlike CSV inference, JSON values carry their own types, so strings are
 // never reinterpreted as numbers or bools; the only string promotion is to
 // TimeType when every non-empty value parses as a time.
-func inferJSONLColumnType(values []any) ColumnType {
+func inferJSONColumnType(values []any) ColumnType {
 	sawNumber := false
 	sawFloat := false
 	sawBool := false
@@ -239,9 +253,9 @@ func inferJSONLColumnType(values []any) ColumnType {
 	return StringType
 }
 
-// buildJSONLSeries converts decoded JSON values into a typed Series.
+// buildJSONSeries converts decoded JSON values into a typed Series.
 // nil (JSON null or missing key) becomes the column type's zero value.
-func buildJSONLSeries(name string, values []any, colType ColumnType) (*Series, error) {
+func buildJSONSeries(name string, values []any, colType ColumnType) (*Series, error) {
 	switch colType {
 	case Int64Type:
 		data := make([]int64, len(values))
@@ -251,7 +265,7 @@ func buildJSONLSeries(name string, values []any, colType ColumnType) (*Series, e
 			}
 			n, err := v.(json.Number).Int64()
 			if err != nil {
-				return nil, wrapError("buildJSONLSeries", err)
+				return nil, wrapError("buildJSONSeries", err)
 			}
 			data[i] = n
 		}
@@ -265,7 +279,7 @@ func buildJSONLSeries(name string, values []any, colType ColumnType) (*Series, e
 			}
 			f, err := v.(json.Number).Float64()
 			if err != nil {
-				return nil, wrapError("buildJSONLSeries", err)
+				return nil, wrapError("buildJSONSeries", err)
 			}
 			data[i] = f
 		}
@@ -293,7 +307,7 @@ func buildJSONLSeries(name string, values []any, colType ColumnType) (*Series, e
 			}
 			t, err := parseTimeValue(trimmed)
 			if err != nil {
-				return nil, wrapError("buildJSONLSeries", err)
+				return nil, wrapError("buildJSONSeries", err)
 			}
 			data[i] = t
 		}
@@ -304,7 +318,7 @@ func buildJSONLSeries(name string, values []any, colType ColumnType) (*Series, e
 		for i, v := range values {
 			s, err := formatJSONValueAsString(v)
 			if err != nil {
-				return nil, wrapError("buildJSONLSeries", err)
+				return nil, wrapError("buildJSONSeries", err)
 			}
 			data[i] = s
 		}
@@ -369,7 +383,7 @@ func (df *DataFrame) WriteJSONL(filename string) error {
 			if err != nil {
 				return wrapColumnError("WriteJSONL", colName, err)
 			}
-			formatted, err := formatValueForJSONL(value)
+			formatted, err := formatValueForJSON(value)
 			if err != nil {
 				return wrapColumnError("WriteJSONL", colName, err)
 			}
@@ -390,8 +404,8 @@ func (df *DataFrame) WriteJSONL(filename string) error {
 	return nil
 }
 
-// formatValueForJSONL formats a single cell as a JSON value
-func formatValueForJSONL(value any) (string, error) {
+// formatValueForJSON formats a single cell as a JSON value
+func formatValueForJSON(value any) (string, error) {
 	switch v := value.(type) {
 	case string:
 		raw, err := json.Marshal(v)

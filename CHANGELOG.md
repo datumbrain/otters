@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+### Fixed
+
+- **`SafeOperation` never actually recovered panics** — `recover()` was called inside a helper function invoked by the deferred closure, where Go defines it as a no-op, so a panic inside the wrapped function escaped to the caller — the exact failure mode the "no panics" design promise forbids. The recovery helper is now installed directly as the deferred function (`defer recoverFromPanic(op, &err)`) and is covered by tests that drive string, error, arbitrary-value, and genuine runtime panics through `SafeOperation`.
+
+### Added
+
+- **Column derivation & transforms** — `Apply(newColumn, fn)` derives a column from whole rows, `Map(src, dst, fn)` transforms one column element-wise, `FillNA(column, value)` replaces missing values, and `DropNA(columns...)` drops rows with missing values (all columns when none given). "Missing" means the column type's zero value, the library's existing CSV/JSONL convention — documented explicitly, since a legitimate 0 is indistinguishable from missing in an int column. Derived-column types are inferred from the returned values (all ints → `Int64Type`, int/float mix → `Float64Type`, uniform string/bool/time kept, other mixes fall back to `StringType` with canonical formatting; `nil` fills the zero value). An existing target column is replaced in place, receivers are never mutated, and a panic inside the user function is captured as an error on the returned frame instead of escaping.
+
+- **Join operations** — `Join(other, on, how)` and `JoinOn(other, leftKeys, rightKeys, how)` with all four join types (`InnerJoin`, `LeftJoin`, `RightJoin`, `OuterJoin`). Hash-join implementation with typed fast paths for single int64/float64/string/bool/time keys and a length-prefixed tuple encoding for composite keys (the same collision-safe scheme GroupBy uses). Key columns appear once in the output under the left frame's name; colliding non-key columns are suffixed `_left`/`_right`. An int64 key may join a float64 key (matched in float64 space, output promoted to `Float64Type`); any other key-type mismatch is an error carried via `Error()`. A key equal to its column type's zero value is treated as missing and never matches, mirroring the CSV/JSONL missing-cell convention; unmatched sides zero-fill the same way. Output order is deterministic: left-frame row order (multi-matches expand in right-frame order), then unmatched right rows in right-frame order. A 100k×10k single-key join runs in ~3 ms with ~60 allocations.
+
+---
+
 ## [1.0.8] — 2026-07-16
 
 ### Documentation
